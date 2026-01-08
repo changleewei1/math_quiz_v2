@@ -1,0 +1,19 @@
+<svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <!-- 黑色圓圈背景 -->
+  <circle cx="60" cy="60" r="55" fill="#000000"/>
+  
+  <!-- MG 字母 - 白色粗體 -->
+  <g fill="#FFFFFF" font-family="Arial, sans-serif" font-weight="bold" font-size="28">
+    <!-- M 字母 -->
+    <text x="40" y="50" font-size="28" font-weight="bold">M</text>
+    <!-- M 上方的小橫線 -->
+    <line x1="38" y1="28" x2="42" y2="28" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+    <!-- G 字母 -->
+    <text x="52" y="50" font-size="28" font-weight="bold">G</text>
+  </g>
+  
+  <!-- MING GUAN 文字 - 白色 -->
+  <text x="60" y="75" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#FFFFFF" text-anchor="middle" letter-spacing="0.5">MING GUAN</text>
+  <!-- CRAM SCHOOL 文字 - 白色 -->
+  <text x="60" y="88" font-family="Arial, sans-serif" font-size="7" font-weight="normal" fill="#FFFFFF" text-anchor="middle" letter-spacing="0.3">CRAM SCHOOL</text>
+</svg>
