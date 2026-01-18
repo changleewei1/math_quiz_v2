@@ -4,7 +4,7 @@ import { supabaseServer } from '@/lib/supabaseServer';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { chapterId } = body;
+    const { chapterId, subject, quizMode } = body;
 
     if (!chapterId) {
       return NextResponse.json(

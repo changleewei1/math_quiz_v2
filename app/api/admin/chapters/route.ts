@@ -1,13 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabaseServer';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url);
+    const gradeId = searchParams.get('gradeId');
+    const term = searchParams.get('term');
+
     const supabase = supabaseServer();
-    const { data, error } = await supabase
+    let query = supabase
       .from('chapters')
-      .select('*')
-      .order('sort_order');
+      .select('*');
+
+    // 如果有篩選條件，套用篩選
+    if (gradeId) {
+      query = query.eq('grade_id', gradeId);
+    }
+    if (term) {
+      query = query.eq('term', term);
+    }
+
+    const { data, error } = await query.order('sort_order');
 
     if (error) throw error;
 
@@ -29,11 +42,30 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { id, title, sort_order } = body;
+    const { id, title, grade_id, term, sort_order } = body;
 
     if (!id || !title) {
       return NextResponse.json(
         { error: '缺少必要欄位：id 和 title' },
+        { status: 400 }
+      );
+    }
+
+    // 驗證 grade_id 和 term（如果提供）
+    const validGradeIds = ['J1-MATH', 'J2-MATH', 'J3-MATH', 'J2-SCI', 'J3-SCI'];
+    const gradeId = grade_id || 'J1-MATH'; // 預設值
+    if (!validGradeIds.includes(gradeId)) {
+      return NextResponse.json(
+        { error: `無效的 grade_id: ${gradeId}` },
+        { status: 400 }
+      );
+    }
+
+    const validTerms = ['upper', 'lower'];
+    const chapterTerm = term || 'upper'; // 預設值
+    if (!validTerms.includes(chapterTerm)) {
+      return NextResponse.json(
+        { error: `無效的 term: ${chapterTerm}` },
         { status: 400 }
       );
     }
@@ -59,6 +91,8 @@ export async function POST(request: NextRequest) {
       .insert({
         id,
         title,
+        grade_id: gradeId,
+        term: chapterTerm,
         sort_order: sort_order || 0,
         is_active: true,
       })

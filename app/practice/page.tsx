@@ -4,20 +4,27 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import type { Chapter, QuestionTypeData, Question } from '@/types';
+import QuestionRenderer from '@/components/questions/QuestionRenderer';
 
 type Difficulty = 'easy' | 'medium' | 'hard';
+type Term = 'upper' | 'lower';
 
 function PracticePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const subject = searchParams.get('subject'); // 'math' 或 'physics'
+  const grade = searchParams.get('grade'); // '1', '2', 或 '3'
   const initialChapterId = searchParams.get('chapterId') || '';
   const initialTypeId = searchParams.get('typeId') || '';
+  const initialSkillId = searchParams.get('skillId') || '';
   const initialDifficulty = (searchParams.get('difficulty') as Difficulty) || 'easy';
 
   const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [filteredChapters, setFilteredChapters] = useState<Chapter[]>([]);
   const [selectedChapter, setSelectedChapter] = useState<string>(initialChapterId);
   const [types, setTypes] = useState<QuestionTypeData[]>([]);
   const [selectedType, setSelectedType] = useState<string>(initialTypeId);
+  const [skillId, setSkillId] = useState<string>(initialSkillId);
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [userAnswer, setUserAnswer] = useState('');
   const [selectedChoiceIndex, setSelectedChoiceIndex] = useState<number | null>(null);
@@ -32,6 +39,126 @@ function PracticePageContent() {
   const [completed, setCompleted] = useState(false);
   const [student, setStudent] = useState<{ id: string; name: string } | null>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [selectedGrade, setSelectedGrade] = useState<'1' | '2' | '3'>(() =>
+    grade === '1' || grade === '2' || grade === '3' ? grade : '1'
+  );
+  const [selectedTerm, setSelectedTerm] = useState<Term | ''>('');
+  const [expandedChapterGroupKeys, setExpandedChapterGroupKeys] = useState<Set<string>>(new Set());
+
+  const PRACTICE_BOOK_STRUCTURE = [
+    {
+      gradeId: 'J1-MATH',
+      term: 'upper' as Term,
+      bookTitle: '第一冊',
+      chapters: [
+        { title: '第一章_數與數線', sectionIds: ['m1-1-1', 'm1-1-2', 'm1-1-3', 'm1-1-4'] },
+        { title: '第二章_標準分解式與分數運算', sectionIds: ['m1-2-1', 'm1-2-2', 'm1-2-3', 'm1-2-4'] },
+        { title: '第三章_一元一次方程式', sectionIds: ['m1-3-1', 'm1-3-2', 'm1-3-3'] },
+      ],
+    },
+    {
+      gradeId: 'J1-MATH',
+      term: 'lower' as Term,
+      bookTitle: '第二冊',
+      chapters: [
+        { title: '第一章_二元一次聯立方程式', sectionIds: ['m1-1-1-l', 'm1-1-2-l', 'm1-1-3-l'] },
+        { title: '第二章_直角坐標與二元一次方程式的圖形', sectionIds: ['m1-2-1-l', 'm1-2-2-l'] },
+        { title: '第三章_比例', sectionIds: ['m1-3-1-l', 'm1-3-2-l'] },
+        { title: '第四章_一元一次不等式', sectionIds: ['m1-4-1-l', 'm1-4-2-l'] },
+        { title: '第五章_統計圖表與統計數據', sectionIds: ['m1-5-1-l'] },
+        { title: '第六章_垂直、線對稱與三視圖', sectionIds: ['m1-6-1-l'] },
+      ],
+    },
+    {
+      gradeId: 'J2-MATH',
+      term: 'upper' as Term,
+      bookTitle: '第三冊',
+      chapters: [
+        { title: '第一章_乘法公式與多項式', sectionIds: ['m2-1-1', 'm2-1-2', 'm2-1-3'] },
+        { title: '第二章_二次方根與畢氏定理', sectionIds: ['m2-2-1', 'm2-2-2', 'm2-2-3'] },
+        { title: '第三章_因式分解', sectionIds: ['m2-3-1', 'm2-3-2'] },
+        { title: '第四章_一元二次方程式', sectionIds: ['m2-4-1', 'm2-4-2', 'm2-4-3'] },
+        { title: '第五章_統計資料處理', sectionIds: ['m2-5-1'] },
+      ],
+    },
+    {
+      gradeId: 'J2-MATH',
+      term: 'lower' as Term,
+      bookTitle: '第四冊',
+      chapters: [
+        { title: '第一章_數列與級數', sectionIds: ['m2-1-1-l', 'm2-1-2-l', 'm2-1-3-l'] },
+        { title: '第二章_線型函數與其圖形', sectionIds: ['m2-2-1-l'] },
+        { title: '第三章_三角形的基本性質', sectionIds: ['m2-3-1-l', 'm2-3-2-l', 'm2-3-3-l', 'm2-3-4-l', 'm2-3-5-l'] },
+        { title: '第四章_平行與四邊形', sectionIds: ['m2-4-1-l', 'm2-4-2-l', 'm2-4-3-l'] },
+      ],
+    },
+    {
+      gradeId: 'J3-MATH',
+      term: 'upper' as Term,
+      bookTitle: '第五冊',
+      chapters: [
+        { title: '第一章_相似形與三角比', sectionIds: ['m3-5-1-1', 'm3-5-1-2', 'm3-5-1-3', 'm3-5-1-4'] },
+        { title: '第二章_圓形', sectionIds: ['m3-5-2-1', 'm3-5-2-2'] },
+        { title: '第三章_推理證明與三角形的基本性質', sectionIds: ['m3-5-3-1', 'm3-5-3-2'] },
+      ],
+    },
+    {
+      gradeId: 'J3-MATH',
+      term: 'lower' as Term,
+      bookTitle: '第六冊',
+      chapters: [
+        { title: '第一章_二次函數', sectionIds: ['m3-6-1-1'] },
+        { title: '第二章_統計與機率', sectionIds: ['m3-6-2-1', 'm3-6-2-2'] },
+        { title: '第三章_立體圖形', sectionIds: ['m3-6-3-1'] },
+      ],
+    },
+    {
+      gradeId: 'J2-SCI',
+      term: 'upper' as Term,
+      bookTitle: '國二理化上學期',
+      chapters: [
+        { title: '第一章_基本測量', sectionIds: ['p2-1-1', 'p2-1-2'] },
+        { title: '第二章_物質的世界', sectionIds: ['p2-2-1', 'p2-2-2', 'p2-2-3', 'p2-2-4'] },
+        { title: '第三章_波動與聲音', sectionIds: ['p2-3-1', 'p2-3-2', 'p2-3-3', 'p2-3-4'] },
+        { title: '第四章_光', sectionIds: ['p2-4-1', 'p2-4-2', 'p2-4-3', 'p2-4-4'] },
+        { title: '第五章_溫度與熱', sectionIds: ['p2-5-1', 'p2-5-2', 'p2-5-3', 'p2-5-4'] },
+        { title: '第六章_探索物質組成', sectionIds: ['p2-6-1', 'p2-6-2', 'p2-6-3', 'p2-6-4'] },
+      ],
+    },
+    {
+      gradeId: 'J2-SCI',
+      term: 'lower' as Term,
+      bookTitle: '國二理化下學期',
+      chapters: [
+        { title: '第一章_化學反應', sectionIds: ['p2-1-1-l', 'p2-1-2-l'] },
+        { title: '第二章_氧化與還原', sectionIds: ['p2-2-1-l', 'p2-2-2-l'] },
+        { title: '第三章_電解質及酸鹼', sectionIds: ['p2-3-1-l', 'p2-3-2-l', 'p2-3-3-l', 'p2-3-4-l'] },
+        { title: '第四章_反應速率與平衡', sectionIds: ['p2-4-1-l', 'p2-4-2-l'] },
+        { title: '第五章_有機化合物', sectionIds: ['p2-5-1-l', 'p2-5-2-l', 'p2-5-3-l', 'p2-5-4-l'] },
+        { title: '第六章_力學', sectionIds: ['p2-6-1-l', 'p2-6-2-l', 'p2-6-3-l', 'p2-6-4-l'] },
+      ],
+    },
+    {
+      gradeId: 'J3-SCI',
+      term: 'upper' as Term,
+      bookTitle: '國三理化上學期',
+      chapters: [
+        { title: '第一章_直線運動', sectionIds: ['p3-1-1', 'p3-1-2', 'p3-1-3', 'p3-1-4'] },
+        { title: '第二章_力與運動', sectionIds: ['p3-2-1', 'p3-2-2', 'p3-2-3', 'p3-2-4'] },
+        { title: '第三章_功與能', sectionIds: ['p3-3-1', 'p3-3-2', 'p3-3-3', 'p3-3-4'] },
+        { title: '第四章_基本的靜電現象與電路', sectionIds: ['p3-4-1', 'p3-4-2', 'p3-4-3', 'p3-4-4'] },
+      ],
+    },
+    {
+      gradeId: 'J3-SCI',
+      term: 'lower' as Term,
+      bookTitle: '國三理化下學期',
+      chapters: [
+        { title: '第一章_電的應用', sectionIds: ['p3b-1-1', 'p3b-1-2', 'p3b-1-3', 'p3b-1-4'] },
+        { title: '第二章_電流與磁現象', sectionIds: ['p3b-2-1', 'p3b-2-2', 'p3b-2-3', 'p3b-2-4'] },
+      ],
+    },
+  ];
 
   useEffect(() => {
     // 檢查學生登入狀態
@@ -56,7 +183,29 @@ function PracticePageContent() {
   }, [router]);
 
   useEffect(() => {
-    if (!student) return; // 等待登入確認
+    // 檢查是否有 subject 和 grade 參數
+    if (!subject || !grade || (subject !== 'math' && subject !== 'physics') || !['1', '2', '3'].includes(grade)) {
+      // 缺少必要參數，導回首頁
+      router.push('/');
+      return;
+    }
+  }, [subject, grade, router]);
+
+  useEffect(() => {
+    if (grade === '1' || grade === '2' || grade === '3') {
+      setSelectedGrade(grade);
+    }
+  }, [grade]);
+
+  useEffect(() => {
+    setSelectedChapter('');
+    setSelectedType('');
+    setTypes([]);
+    setExpandedChapterGroupKeys(new Set());
+  }, [selectedGrade, selectedTerm, subject]);
+
+  useEffect(() => {
+    if (!student || !subject || !grade) return; // 等待登入確認和參數
 
     // 頁面載入時立即載入章節列表
     loadChapters(false);
@@ -81,13 +230,13 @@ function PracticePageContent() {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [student]);
+  }, [student, subject, grade]);
 
   useEffect(() => {
-    if (selectedChapter) {
+    if (!skillId && selectedChapter) {
       loadTypes(selectedChapter);
     }
-  }, [selectedChapter]);
+  }, [selectedChapter, skillId]);
 
   const loadChapters = async (preserveSelection = true) => {
     try {
@@ -101,15 +250,32 @@ function PracticePageContent() {
       });
       const data = await res.json();
       if (res.ok && data.data) {
-        const currentSelectedChapter = selectedChapter;
-        const chapterIds = data.data.map((ch: Chapter) => ch.id);
-        console.log('載入的章節列表:', chapterIds);
-        console.log('章節詳細資訊:', data.data.map((ch: Chapter) => `${ch.id} - ${ch.title} (is_active: ${ch.is_active})`));
         setChapters(data.data);
         
+        const gradeId =
+          subject === 'math'
+            ? `J${selectedGrade}-MATH`
+            : subject === 'physics'
+              ? `J${selectedGrade}-SCI`
+              : '';
+        const filtered = data.data.filter((ch: Chapter) => {
+          if (!gradeId || ch.grade_id !== gradeId) return false;
+          if (selectedTerm && ch.term !== selectedTerm) return false;
+          return true;
+        });
+        
+        setFilteredChapters(filtered);
+        
+        const chapterIds = filtered.map((ch: Chapter) => ch.id);
+        const subjectName = subject === 'math' ? '數學' : '理化';
+        const gradeName = selectedGrade === '1' ? '國一' : selectedGrade === '2' ? '國二' : '國三';
+        const termName = selectedTerm === 'upper' ? '上學期' : selectedTerm === 'lower' ? '下學期' : '';
+        console.log(`載入的${gradeName}${subjectName}${termName}章節列表:`, chapterIds);
+        console.log('章節詳細資訊:', filtered.map((ch: Chapter) => `${ch.id} - ${ch.title} (is_active: ${ch.is_active})`));
+        
         // 檢查當前選中的章節是否在新列表中
-        if (currentSelectedChapter) {
-          const updatedChapter = data.data.find((ch: Chapter) => ch.id === currentSelectedChapter);
+        if (selectedChapter) {
+          const updatedChapter = filtered.find((ch: Chapter) => ch.id === selectedChapter);
           if (!updatedChapter) {
             // 章節不存在了，清除選中狀態
             console.log('原選中的章節不存在，清除選擇');
@@ -117,7 +283,7 @@ function PracticePageContent() {
             setSelectedType('');
             setTypes([]);
           } else if (preserveSelection) {
-            console.log('保留選中的章節:', currentSelectedChapter);
+            console.log('保留選中的章節:', selectedChapter);
           }
         }
       } else {
@@ -162,7 +328,7 @@ function PracticePageContent() {
   };
 
   const startPractice = async () => {
-    if (!selectedChapter || !selectedType) return;
+    if (!skillId && (!selectedChapter || !selectedType)) return;
 
     setLoading(true);
     try {
@@ -173,6 +339,7 @@ function PracticePageContent() {
         body: JSON.stringify({
           chapterId: selectedChapter,
           typeId: selectedType,
+          skillId,
         }),
       });
 
@@ -193,7 +360,7 @@ function PracticePageContent() {
   };
 
   const loadNextQuestion = async () => {
-    if (!selectedChapter || !selectedType) return;
+    if (!skillId && (!selectedChapter || !selectedType)) return;
 
     setLoading(true);
     try {
@@ -203,6 +370,7 @@ function PracticePageContent() {
         body: JSON.stringify({
           chapterId: selectedChapter,
           typeId: selectedType,
+          skillId,
           difficulty,
         }),
       });
@@ -211,6 +379,12 @@ function PracticePageContent() {
       if (res.ok) {
         if (data.question) {
           setCurrentQuestion(data.question);
+          if (data.question.chapter_id) {
+            setSelectedChapter(data.question.chapter_id);
+          }
+          if (data.question.type_id) {
+            setSelectedType(data.question.type_id);
+          }
           setUserAnswer('');
           setSelectedChoiceIndex(null);
         } else {
@@ -245,8 +419,8 @@ function PracticePageContent() {
         body: JSON.stringify({
           sessionId,
           questionId: currentQuestion.id,
-          chapterId: selectedChapter,
-          typeId: selectedType,
+          chapterId: currentQuestion.chapter_id || selectedChapter,
+          typeId: currentQuestion.type_id || selectedType,
           difficulty: currentQuestion.difficulty,
           qtype: currentQuestion.qtype,
           prompt: currentQuestion.prompt,
@@ -322,6 +496,58 @@ function PracticePageContent() {
     return null; // 會導向登入頁
   }
 
+  // 檢查 subject 和 grade 參數
+  if (!subject || !grade || (subject !== 'math' && subject !== 'physics') || !['1', '2', '3'].includes(grade)) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-4 flex items-center justify-center">
+        <div className="bg-white p-8 rounded-lg shadow-lg text-center max-w-md">
+          <h1 className="text-2xl font-bold mb-4 text-red-600">錯誤</h1>
+          <p className="text-gray-600 mb-6">
+            請先選擇科目與年級
+          </p>
+          <Link
+            href="/"
+            className="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          >
+            回到首頁選擇
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // 定義科目和年級名稱（在檢查之後，確保參數有效）
+  const subjectName = subject === 'math' ? '數學' : '理化';
+  const gradeName = selectedGrade === '1' ? '國一' : selectedGrade === '2' ? '國二' : '國三';
+  const termName = selectedTerm === 'upper' ? '上學期' : selectedTerm === 'lower' ? '下學期' : '';
+  const selectedGradeId =
+    subject === 'math'
+      ? `J${selectedGrade}-MATH`
+      : subject === 'physics'
+        ? `J${selectedGrade}-SCI`
+        : '';
+
+  const chapterGroups = (() => {
+    if (!selectedGradeId || !selectedTerm) return [];
+    const books = PRACTICE_BOOK_STRUCTURE.filter(
+      (book) => book.gradeId === selectedGradeId && book.term === selectedTerm
+    );
+    const chapterMap = new Map(
+      filteredChapters.map((ch) => [ch.id, ch])
+    );
+    return books
+      .map((book) => ({
+        bookTitle: book.bookTitle,
+        groups: book.chapters
+          .map((group) => ({
+            title: group.title,
+            items: group.sectionIds.map((id) => chapterMap.get(id)).filter(Boolean) as Chapter[],
+          }))
+          .filter((group) => group.items.length > 0),
+      }))
+      .filter((book) => book.groups.length > 0);
+  })();
+
   if (completed) {
     return (
       <div className="min-h-screen bg-gray-50 p-4 flex items-center justify-center">
@@ -369,7 +595,12 @@ function PracticePageContent() {
       <div className="min-h-screen bg-gray-50 p-4">
         <div className="max-w-2xl mx-auto bg-white p-8 rounded-lg shadow">
           <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold">題型練習模式</h1>
+            <div>
+              <h1 className="text-3xl font-bold">{skillId ? '技能練習模式' : '題型練習模式'}</h1>
+              <p className="text-lg text-gray-600 mt-2">
+                {subjectName} {gradeName}{termName ? ` ${termName}` : ''}
+              </p>
+            </div>
             <Link
               href="/"
               className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 text-sm"
@@ -378,61 +609,180 @@ function PracticePageContent() {
             </Link>
           </div>
 
+            {!skillId && filteredChapters.length === 0 && selectedTerm && (
+            <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-yellow-800">
+                {subjectName} {gradeName} {termName}的章節尚未建立，請聯繫管理員。
+              </p>
+            </div>
+          )}
+
           {error && (
             <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">{error}</div>
           )}
 
           <div className="space-y-4">
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <label className="block text-sm font-medium">選擇章節</label>
-                <button
-                  onClick={() => loadChapters(true)}
-                  className="text-xs text-blue-600 hover:text-blue-800 underline"
-                  type="button"
-                >
-                  刷新列表
-                </button>
+            {skillId ? (
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-blue-800">
+                  目前練習技能：{skillId}
+                </p>
+                <p className="text-sm text-blue-700 mt-1">
+                  系統會依此技能隨機出題。
+                </p>
               </div>
-              <select
-                value={selectedChapter}
-                onChange={(e) => {
-                  setSelectedChapter(e.target.value);
-                  setSelectedType('');
-                }}
-                onFocus={() => loadChapters(true)}
-                className="w-full p-2 bg-white text-gray-900 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">請選擇章節</option>
-                {chapters.map((ch) => (
-                  <option key={ch.id} value={ch.id}>
-                    {ch.id} - {ch.title}
-                  </option>
-                ))}
-              </select>
-            </div>
+            ) : (
+              <>
+                <div>
+                  <label className="block text-sm font-medium mb-2">選擇年級</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(['1', '2', '3'] as const).map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => {
+                          if (value !== selectedGrade) return;
+                          setSelectedGrade(value);
+                          setSelectedTerm('');
+                        }}
+                        disabled={value !== selectedGrade}
+                        className={`px-3 py-2 text-sm rounded border ${
+                          selectedGrade === value
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                        }`}
+                      >
+                        {value === '1' ? '國一' : value === '2' ? '國二' : '國三'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-            {selectedChapter && (
-              <div>
-                <label className="block text-sm font-medium mb-2">選擇題型</label>
-                <select
-                  value={selectedType}
-                  onChange={(e) => setSelectedType(e.target.value)}
-                  className="w-full p-2 bg-white text-gray-900 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="">請選擇題型</option>
-                  {types.map((type) => (
-                    <option key={type.id} value={type.id}>
-                      {type.code} - {type.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">選擇學期</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['upper', 'lower'] as const).map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setSelectedTerm(value)}
+                        className={`px-3 py-2 text-sm rounded border ${
+                          selectedTerm === value
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        {value === 'upper' ? '上學期' : '下學期'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="block text-sm font-medium">選擇章節</label>
+                    <button
+                      onClick={() => loadChapters(true)}
+                      className="text-xs text-blue-600 hover:text-blue-800 underline"
+                      type="button"
+                    >
+                      刷新列表
+                    </button>
+                  </div>
+                  <div className={`border rounded bg-white ${!selectedTerm ? 'opacity-60' : ''}`}>
+                    {!selectedTerm ? (
+                      <div className="p-3 text-sm text-gray-500">請先選擇學期</div>
+                    ) : chapterGroups.length > 0 ? (
+                      chapterGroups.map((book) => (
+                        <div key={book.bookTitle} className="border-b last:border-b-0">
+                          <div className="px-3 py-2 text-sm font-semibold bg-gray-50 text-gray-800">
+                            {book.bookTitle}
+                          </div>
+                          <div className="pl-4 py-1">
+                            {book.groups.map((group) => {
+                              const groupKey = `${book.bookTitle}|${group.title}`;
+                              const groupOpen = expandedChapterGroupKeys.has(groupKey);
+                              return (
+                                <div key={groupKey} className="border-l border-gray-200">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setExpandedChapterGroupKeys((prev) => {
+                                        const next = new Set(prev);
+                                        if (next.has(groupKey)) {
+                                          next.delete(groupKey);
+                                        } else {
+                                          next.add(groupKey);
+                                        }
+                                        return next;
+                                      });
+                                    }}
+                                    className="w-full text-left px-3 py-2 text-sm font-medium hover:bg-gray-50"
+                                  >
+                                    {groupOpen ? '[-] ' : '[+] '} {group.title}
+                                  </button>
+                                  {groupOpen && (
+                                    <div className="pl-4 py-1">
+                                      {group.items.map((ch) => {
+                                        const sectionCode = ch.id
+                                          .replace(/^[a-z]\d+[a-z]?-/i, '')
+                                          .replace(/-l$/, '');
+                                        return (
+                                          <button
+                                            key={ch.id}
+                                            type="button"
+                                            onClick={() => {
+                                              setSelectedChapter(ch.id);
+                                              setSelectedType('');
+                                              setTypes([]);
+                                            }}
+                                            className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 ${
+                                              ch.id === selectedChapter ? 'bg-gray-100 font-medium' : ''
+                                            }`}
+                                          >
+                                            {sectionCode} {ch.title}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-3 text-sm text-gray-500">
+                        章節結構尚未建立，請聯繫管理員。
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {selectedChapter && (
+                  <div>
+                    <label className="block text-sm font-medium mb-2">選擇題型</label>
+                    <select
+                      value={selectedType}
+                      onChange={(e) => setSelectedType(e.target.value)}
+                      className="w-full p-2 bg-white text-gray-900 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">請選擇題型</option>
+                      {types.map((type) => (
+                        <option key={type.id} value={type.id}>
+                          {type.code} - {type.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </>
             )}
 
             <button
               onClick={startPractice}
-              disabled={!selectedChapter || !selectedType || loading}
+              disabled={skillId ? loading : (!selectedChapter || !selectedType || loading)}
               className="w-full px-6 py-3 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
             >
               {loading ? '啟動中...' : '開始練習'}
@@ -476,7 +826,7 @@ function PracticePageContent() {
             <div className="flex-1">
               <h1 className="text-2xl font-bold mb-2">題型練習</h1>
               <div className="text-sm text-gray-600">
-                連續答對: {streak10} / 10 | 難度: {difficulty === 'easy' ? '簡單' : difficulty === 'medium' ? '中等' : '困難'}
+                {subjectName} {gradeName}{termName ? ` ${termName}` : ''} | 連續答對: {streak10} / 10 | 難度: {difficulty === 'easy' ? '簡單' : difficulty === 'medium' ? '中等' : '困難'}
               </div>
             </div>
             <Link
@@ -494,7 +844,7 @@ function PracticePageContent() {
               {currentQuestion.difficulty} | {currentQuestion.qtype}
             </span>
           </div>
-          <p className="text-lg mb-6">{currentQuestion.prompt}</p>
+          <QuestionRenderer prompt={currentQuestion.prompt} media={currentQuestion.media} className="mb-6" />
 
           {currentQuestion.qtype === 'mcq' && currentQuestion.choices ? (
             <div className="space-y-2 mb-6">

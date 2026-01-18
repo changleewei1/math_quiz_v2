@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { getQuizModeName, getSubjectName } from '@/types/quizMode';
 
 interface TypeStat {
   typeId: string;
@@ -22,6 +23,8 @@ interface StudentReport {
     id: string;
     chapterId: string;
     chapterTitle: string;
+    subject?: string;
+    quizMode?: string;
     startedAt: string;
     endedAt: string | null;
   };
@@ -147,10 +150,24 @@ export default function ClassStudentReportPage() {
                 {studentName || '學生'} - 弱點分析報告
               </h1>
               <p className="text-gray-600 mt-1">
-                章節：{studentReport.latestSession.chapterTitle}
+                <span className="font-semibold">科目：</span>
+                {studentReport.latestSession.subject ? getSubjectName(studentReport.latestSession.subject as any) : '數學'}
+                {' · '}
+                <span className="font-semibold">模式：</span>
+                {studentReport.latestSession.quizMode ? getQuizModeName(studentReport.latestSession.quizMode as any) : '平常'}
               </p>
               <p className="text-gray-600">
-                測驗時間：{new Date(studentReport.latestSession.startedAt).toLocaleString('zh-TW')}
+                <span className="font-semibold">章節：</span>{studentReport.latestSession.chapterTitle}
+              </p>
+              <p className="text-gray-600">
+                <span className="font-semibold">測驗時間：</span>
+                {new Date(studentReport.latestSession.startedAt).toLocaleDateString('zh-TW', { 
+                  year: 'numeric', 
+                  month: 'long', 
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}
               </p>
             </div>
             <button

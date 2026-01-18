@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { getStudentSession } from '@/lib/studentAuth';
+import { buildDailyPracticeSummary } from '@/lib/dailyPracticeReport';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { chapterId, answers } = body;
+    const { chapterId, subject, quizMode, answers } = body;
 
     if (!chapterId || !Array.isArray(answers)) {
       return NextResponse.json(
@@ -19,11 +20,13 @@ export async function POST(request: NextRequest) {
 
     const supabase = supabaseServer();
 
-    // 建立 session
+    // 建立 session（包含新模式資訊）
     const { data: session, error: sessionError } = await supabase
       .from('student_sessions')
       .insert({
-        mode: 'diagnostic',
+        mode: 'diagnostic',  // 保留舊的 mode 欄位（向後相容）
+        subject: subject || 'math',  // 新增：科目
+        quiz_mode: quizMode || 'daily_practice',  // 新增：測驗模式
         chapter_id: chapterId,
         student_id: studentId,
         settings: {},
@@ -142,6 +145,27 @@ export async function POST(request: NextRequest) {
       return priorityOrder[b.priority] - priorityOrder[a.priority];
     });
 
+    // 如果是 daily_practice，產生最小可用弱點分析報告
+    let dailyPracticeSummary: any = null;
+    if ((quizMode || 'daily_practice') === 'daily_practice') {
+      try {
+        dailyPracticeSummary = await buildDailyPracticeSummary(session.id);
+        const { error: reportError } = await supabase
+          .from('analysis_reports')
+          .insert({
+            session_id: session.id,
+            subject: (subject || 'math'),
+            mode: 'daily_practice',
+            summary_json: dailyPracticeSummary,
+          });
+        if (reportError) {
+          console.error('寫入 analysis_reports 失敗:', reportError);
+        }
+      } catch (err: any) {
+        console.error('產生 daily_practice 分析失敗:', err);
+      }
+    }
+
     // 嘗試生成報告並發送 LINE 訊息（非阻塞）
     let reportStatus: { sent: boolean; error?: string } | null = null;
     try {
@@ -161,6 +185,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       sessionId: session.id,
       analysis,
+      dailyPracticeSummary,
       reportStatus,
     });
   } catch (error: any) {

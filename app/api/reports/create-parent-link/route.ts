@@ -49,7 +49,25 @@ export async function POST(request: NextRequest) {
     const token = generateReportToken(studentId, days);
 
     // 生成完整 URL
-    const baseUrl = process.env.APP_PUBLIC_BASE_URL || 'http://localhost:3000';
+    // 優先使用環境變數，如果未設定或設定錯誤，則根據環境自動判斷
+    let baseUrl = process.env.APP_PUBLIC_BASE_URL;
+    
+    // 如果未設定或設定為空，則根據環境使用預設值
+    if (!baseUrl || baseUrl.trim() === '') {
+      if (process.env.NODE_ENV === 'production') {
+        // 生產環境：嘗試從 request 獲取
+        const host = request.headers.get('host');
+        const protocol = request.headers.get('x-forwarded-proto') || 'https';
+        baseUrl = host ? `${protocol}://${host}` : 'http://localhost:3000';
+      } else {
+        // 開發環境
+        baseUrl = 'http://localhost:3000';
+      }
+    }
+    
+    // 確保 baseUrl 沒有尾隨斜線
+    baseUrl = baseUrl.replace(/\/$/, '');
+    
     const reportUrl = `${baseUrl}/report/student/${studentId}?token=${token}`;
     const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 

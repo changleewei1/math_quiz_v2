@@ -81,6 +81,8 @@ export async function GET(request: NextRequest) {
         id: result.session.id,
         chapterId: result.chapterId,
         chapterTitle: result.chapterTitle,
+        subject: result.session.subject || 'math',
+        quizMode: result.session.quiz_mode || 'daily_practice',
         startedAt: result.session.started_at,
         endedAt: result.session.ended_at,
       },

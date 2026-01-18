@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { getQuizModeName, getSubjectName } from '@/types/quizMode';
 
 interface TypeStat {
   typeId: string;
@@ -34,6 +35,8 @@ interface ReportData {
     id: string;
     chapterId: string;
     chapterTitle: string;
+    subject?: string;
+    quizMode?: string;
     startedAt: string;
     endedAt: string | null;
   };
@@ -138,9 +141,23 @@ export default function StudentReportPage() {
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <h1 className="text-2xl font-bold text-gray-800 mb-2">弱點分析報告</h1>
           <div className="text-gray-600 space-y-1">
+            <p>
+              <span className="font-semibold">科目：</span>
+              {report.latestSession.subject ? getSubjectName(report.latestSession.subject as any) : '數學'}
+            </p>
+            <p>
+              <span className="font-semibold">模式：</span>
+              {report.latestSession.quizMode ? getQuizModeName(report.latestSession.quizMode as any) : '平常'}
+            </p>
             <p><span className="font-semibold">章節：</span>{report.latestSession.chapterTitle}</p>
             <p><span className="font-semibold">測驗時間：</span>
-              {new Date(report.latestSession.startedAt).toLocaleString('zh-TW')}
+              {new Date(report.latestSession.startedAt).toLocaleDateString('zh-TW', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              })}
             </p>
           </div>
         </div>

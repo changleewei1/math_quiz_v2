@@ -5,9 +5,9 @@ import { getStudentSession } from '@/lib/studentAuth';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { chapterId, typeId } = body;
+    const { chapterId, typeId, skillId } = body;
 
-    if (!chapterId || !typeId) {
+    if ((!chapterId || !typeId) && !skillId) {
       return NextResponse.json(
         { error: '缺少必要參數' },
         { status: 400 }
@@ -23,10 +23,10 @@ export async function POST(request: NextRequest) {
       .from('student_sessions')
       .insert({
         mode: 'practice',
-        chapter_id: chapterId,
-        type_id: typeId,
+        chapter_id: chapterId || null,
+        type_id: typeId || null,
         student_id: studentId,
-        settings: {},
+        settings: skillId ? { skillId } : {},
       })
       .select()
       .single();

@@ -12,6 +12,7 @@ function TeacherLoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get('next') || '/teacher';
+  const [showPassword, setShowPassword] = useState(false);
   
   // 檢查是否已經登入
   useEffect(() => {
@@ -93,13 +94,21 @@ function TeacherLoginContent() {
             </label>
             <input
               id="password"
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               className="w-full p-3 bg-white text-gray-900 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="請輸入密碼"
             />
+            <label className="mt-2 flex items-center gap-2 text-sm text-gray-600">
+              <input
+                type="checkbox"
+                checked={showPassword}
+                onChange={(e) => setShowPassword(e.target.checked)}
+              />
+              顯示密碼
+            </label>
           </div>
 
           <button

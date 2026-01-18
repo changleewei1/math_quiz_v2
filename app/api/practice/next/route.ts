@@ -4,9 +4,9 @@ import { supabaseServer } from '@/lib/supabaseServer';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { chapterId, typeId, difficulty } = body;
+    const { chapterId, typeId, difficulty, skillId } = body;
 
-    if (!chapterId || !typeId || !difficulty) {
+    if (!difficulty || (!skillId && (!chapterId || !typeId))) {
       return NextResponse.json(
         { error: '缺少必要參數' },
         { status: 400 }
@@ -16,13 +16,19 @@ export async function POST(request: NextRequest) {
     const supabase = supabaseServer();
 
     // 隨機取得一題
-    const { data: questions, error } = await supabase
+    let query = supabase
       .from('questions')
       .select('*')
-      .eq('chapter_id', chapterId)
-      .eq('type_id', typeId)
       .eq('difficulty', difficulty)
       .eq('is_active', true);
+
+    if (skillId) {
+      query = query.eq('skill_id', skillId);
+    } else {
+      query = query.eq('chapter_id', chapterId).eq('type_id', typeId);
+    }
+
+    const { data: questions, error } = await query;
 
     if (error) throw error;
 

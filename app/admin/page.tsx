@@ -4,10 +4,13 @@ import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import type { Chapter, QuestionTypeData, Question } from '@/types';
+import type { GradeId, Term } from '@/types/grade';
+import { GRADES, TERMS, getGradeName, getTermName } from '@/types/grade';
 
 function AdminPageContent() {
   const searchParams = useSearchParams();
   const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [filteredChapters, setFilteredChapters] = useState<Chapter[]>([]);
   const [selectedChapter, setSelectedChapter] = useState<string>('');
   const [types, setTypes] = useState<QuestionTypeData[]>([]);
   const [selectedType, setSelectedType] = useState<string>('');
@@ -15,10 +18,16 @@ function AdminPageContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
+  // 篩選狀態
+  const [filterGradeId, setFilterGradeId] = useState<GradeId | ''>('');
+  const [filterTerm, setFilterTerm] = useState<Term | ''>('');
+  
   // 表單狀態
   const [showAddChapter, setShowAddChapter] = useState(false);
   const [newChapterId, setNewChapterId] = useState('');
   const [newChapterTitle, setNewChapterTitle] = useState('');
+  const [newChapterGradeId, setNewChapterGradeId] = useState<GradeId>('J1-MATH');
+  const [newChapterTerm, setNewChapterTerm] = useState<Term>('upper');
   const [newChapterSortOrder, setNewChapterSortOrder] = useState(0);
   const [insertChapterAfter, setInsertChapterAfter] = useState<string>(''); // 'none' 或章節 ID
   
@@ -45,6 +54,8 @@ function AdminPageContent() {
   const [editingChapter, setEditingChapter] = useState<string | null>(null);
   const [editChapterId, setEditChapterId] = useState('');
   const [editChapterTitle, setEditChapterTitle] = useState('');
+  const [editChapterGradeId, setEditChapterGradeId] = useState<GradeId>('J1-MATH');
+  const [editChapterTerm, setEditChapterTerm] = useState<Term>('upper');
   const [editChapterSortOrder, setEditChapterSortOrder] = useState(0);
   
   const [editingType, setEditingType] = useState<string | null>(null);
@@ -52,6 +63,195 @@ function AdminPageContent() {
   const [editTypeCode, setEditTypeCode] = useState('');
   const [editTypeDescription, setEditTypeDescription] = useState('');
   const [editTypeSortOrder, setEditTypeSortOrder] = useState(0);
+  const [expandedGroupKeys, setExpandedGroupKeys] = useState<Set<string>>(new Set());
+  const [expandedBookKeys, setExpandedBookKeys] = useState<Set<string>>(new Set());
+  const [expandedChapterGroupKeys, setExpandedChapterGroupKeys] = useState<Set<string>>(new Set());
+  const [expandedChapterId, setExpandedChapterId] = useState<string>('');
+  const [selectedSubject, setSelectedSubject] = useState<'math' | 'science' | ''>('');
+
+  // 章節分組（依年級與學期）
+  const gradeOrder = new Map(GRADES.map((g, idx) => [g.id, idx]));
+  const termOrder = new Map(TERMS.map((t, idx) => [t.id, idx]));
+  const groupedChapterList = (() => {
+    const groups: Record<string, { label: string; items: Chapter[]; gradeId: GradeId; term: Term }> = {};
+    for (const ch of filteredChapters) {
+      if (selectedSubject) {
+        const isMath = ch.grade_id.endsWith('-MATH');
+        if (selectedSubject === 'math' && !isMath) continue;
+        if (selectedSubject === 'science' && isMath) continue;
+      }
+      const key = `${ch.grade_id}|${ch.term}`;
+      const termMark = ch.term === 'upper' ? '上' : '下';
+      if (!groups[key]) {
+        groups[key] = {
+          label: `【${termMark}】${getGradeName(ch.grade_id)}`,
+          items: [],
+          gradeId: ch.grade_id,
+          term: ch.term,
+        };
+      }
+      groups[key].items.push(ch);
+    }
+    return Object.values(groups)
+      .map((group) => ({
+        ...group,
+        items: group.items.sort((a, b) => a.sort_order - b.sort_order),
+      }))
+      .sort((a, b) => {
+        const gA = gradeOrder.get(a.gradeId) ?? 0;
+        const gB = gradeOrder.get(b.gradeId) ?? 0;
+        if (gA !== gB) return gA - gB;
+        const tA = termOrder.get(a.term) ?? 0;
+        const tB = termOrder.get(b.term) ?? 0;
+        return tA - tB;
+      });
+  })();
+
+  // 冊別大標題設定（先從國一上學期開始）
+  const BOOK_STRUCTURE = [
+    {
+      gradeId: 'J1-MATH' as GradeId,
+      term: 'upper' as Term,
+      bookTitle: '第一冊',
+      chapters: [
+        { title: '第一章_數與數線', sectionIds: ['m1-1-1', 'm1-1-2', 'm1-1-3', 'm1-1-4'] },
+        { title: '第二章_標準分解式與分數運算', sectionIds: ['m1-2-1', 'm1-2-2', 'm1-2-3', 'm1-2-4'] },
+        { title: '第三章_一元一次方程式', sectionIds: ['m1-3-1', 'm1-3-2', 'm1-3-3'] },
+      ],
+    },
+    {
+      gradeId: 'J1-MATH' as GradeId,
+      term: 'lower' as Term,
+      bookTitle: '第二冊',
+      chapters: [
+        { title: '第一章_二元一次聯立方程式', sectionIds: ['m1-1-1-l', 'm1-1-2-l', 'm1-1-3-l'] },
+        { title: '第二章_直角坐標與二元一次方程式的圖形', sectionIds: ['m1-2-1-l', 'm1-2-2-l'] },
+        { title: '第三章_比例', sectionIds: ['m1-3-1-l', 'm1-3-2-l'] },
+        { title: '第四章_一元一次不等式', sectionIds: ['m1-4-1-l', 'm1-4-2-l'] },
+        { title: '第五章_統計圖表與統計數據', sectionIds: ['m1-5-1-l'] },
+        { title: '第六章_垂直、線對稱與三視圖', sectionIds: ['m1-6-1-l'] },
+      ],
+    },
+    {
+      gradeId: 'J2-MATH' as GradeId,
+      term: 'upper' as Term,
+      bookTitle: '第三冊',
+      chapters: [
+        { title: '第一章_乘法公式與多項式', sectionIds: ['m2-1-1', 'm2-1-2', 'm2-1-3'] },
+        { title: '第二章_二次方根與畢氏定理', sectionIds: ['m2-2-1', 'm2-2-2', 'm2-2-3'] },
+        { title: '第三章_因式分解', sectionIds: ['m2-3-1', 'm2-3-2'] },
+        { title: '第四章_一元二次方程式', sectionIds: ['m2-4-1', 'm2-4-2', 'm2-4-3'] },
+        { title: '第五章_統計資料處理', sectionIds: ['m2-5-1'] },
+      ],
+    },
+    {
+      gradeId: 'J2-MATH' as GradeId,
+      term: 'lower' as Term,
+      bookTitle: '第四冊',
+      chapters: [
+        { title: '第一章_數列與級數', sectionIds: ['m2-1-1-l', 'm2-1-2-l', 'm2-1-3-l'] },
+        { title: '第二章_線型函數與其圖形', sectionIds: ['m2-2-1-l'] },
+        { title: '第三章_三角形的基本性質', sectionIds: ['m2-3-1-l', 'm2-3-2-l', 'm2-3-3-l', 'm2-3-4-l', 'm2-3-5-l'] },
+        { title: '第四章_平行與四邊形', sectionIds: ['m2-4-1-l', 'm2-4-2-l', 'm2-4-3-l'] },
+      ],
+    },
+    {
+      gradeId: 'J3-MATH' as GradeId,
+      term: 'upper' as Term,
+      bookTitle: '第五冊',
+      chapters: [
+        { title: '第一章_相似形與三角比', sectionIds: ['m3-5-1-1', 'm3-5-1-2', 'm3-5-1-3', 'm3-5-1-4'] },
+        { title: '第二章_圓形', sectionIds: ['m3-5-2-1', 'm3-5-2-2'] },
+        { title: '第三章_推理證明與三角形的基本性質', sectionIds: ['m3-5-3-1', 'm3-5-3-2'] },
+      ],
+    },
+    {
+      gradeId: 'J3-MATH' as GradeId,
+      term: 'lower' as Term,
+      bookTitle: '第六冊',
+      chapters: [
+        { title: '第一章_二次函數', sectionIds: ['m3-6-1-1'] },
+        { title: '第二章_統計與機率', sectionIds: ['m3-6-2-1', 'm3-6-2-2'] },
+        { title: '第三章_立體圖形', sectionIds: ['m3-6-3-1'] },
+      ],
+    },
+    {
+      gradeId: 'J2-SCI' as GradeId,
+      term: 'upper' as Term,
+      bookTitle: '國二理化上學期',
+      chapters: [
+        { title: '第一章_基本測量', sectionIds: ['p2-1-1', 'p2-1-2'] },
+        { title: '第二章_物質的世界', sectionIds: ['p2-2-1', 'p2-2-2', 'p2-2-3', 'p2-2-4'] },
+        { title: '第三章_波動與聲音', sectionIds: ['p2-3-1', 'p2-3-2', 'p2-3-3', 'p2-3-4'] },
+        { title: '第四章_光', sectionIds: ['p2-4-1', 'p2-4-2', 'p2-4-3', 'p2-4-4'] },
+        { title: '第五章_溫度與熱', sectionIds: ['p2-5-1', 'p2-5-2', 'p2-5-3', 'p2-5-4'] },
+        { title: '第六章_探索物質組成', sectionIds: ['p2-6-1', 'p2-6-2', 'p2-6-3', 'p2-6-4'] },
+      ],
+    },
+    {
+      gradeId: 'J2-SCI' as GradeId,
+      term: 'lower' as Term,
+      bookTitle: '國二理化下學期',
+      chapters: [
+        { title: '第一章_化學反應', sectionIds: ['p2-1-1-l', 'p2-1-2-l'] },
+        { title: '第二章_氧化與還原', sectionIds: ['p2-2-1-l', 'p2-2-2-l'] },
+        { title: '第三章_電解質及酸鹼', sectionIds: ['p2-3-1-l', 'p2-3-2-l', 'p2-3-3-l', 'p2-3-4-l'] },
+        { title: '第四章_反應速率與平衡', sectionIds: ['p2-4-1-l', 'p2-4-2-l'] },
+        { title: '第五章_有機化合物', sectionIds: ['p2-5-1-l', 'p2-5-2-l', 'p2-5-3-l', 'p2-5-4-l'] },
+        { title: '第六章_力學', sectionIds: ['p2-6-1-l', 'p2-6-2-l', 'p2-6-3-l', 'p2-6-4-l'] },
+      ],
+    },
+    {
+      gradeId: 'J3-SCI' as GradeId,
+      term: 'upper' as Term,
+      bookTitle: '國三理化上學期',
+      chapters: [
+        { title: '第一章_直線運動', sectionIds: ['p3-1-1', 'p3-1-2', 'p3-1-3', 'p3-1-4'] },
+        { title: '第二章_力與運動', sectionIds: ['p3-2-1', 'p3-2-2', 'p3-2-3', 'p3-2-4'] },
+        { title: '第三章_功與能', sectionIds: ['p3-3-1', 'p3-3-2', 'p3-3-3', 'p3-3-4'] },
+        { title: '第四章_基本的靜電現象與電路', sectionIds: ['p3-4-1', 'p3-4-2', 'p3-4-3', 'p3-4-4'] },
+      ],
+    },
+    {
+      gradeId: 'J3-SCI' as GradeId,
+      term: 'lower' as Term,
+      bookTitle: '國三理化下學期',
+      chapters: [
+        { title: '第一章_電的應用', sectionIds: ['p3b-1-1', 'p3b-1-2', 'p3b-1-3', 'p3b-1-4'] },
+        { title: '第二章_電流與磁現象', sectionIds: ['p3b-2-1', 'p3b-2-2', 'p3b-2-3', 'p3b-2-4'] },
+      ],
+    },
+  ];
+
+  const bookChapterTree = (() => {
+    if (!selectedSubject) return [];
+    const subjectGradeSuffix = selectedSubject === 'math' ? '-MATH' : '-SCI';
+    const filteredBooks = BOOK_STRUCTURE.filter((book) =>
+      book.gradeId.endsWith(subjectGradeSuffix)
+    );
+    return filteredBooks
+      .map((book) => {
+        const chapterMap = new Map(
+          filteredChapters
+            .filter((ch) => ch.grade_id === book.gradeId && ch.term === book.term)
+            .map((ch) => [ch.id, ch])
+        );
+        const sections = book.chapters
+          .map((group) => ({
+            title: group.title,
+            items: group.sectionIds.map((id) => chapterMap.get(id)).filter(Boolean) as Chapter[],
+          }))
+          .filter((group) => group.items.length > 0);
+        return {
+          key: `${book.gradeId}|${book.term}|${book.bookTitle}`,
+          gradeId: book.gradeId,
+          term: book.term,
+          title: book.bookTitle,
+          sections,
+        };
+      })
+      .filter((book) => book.sections.length > 0);
+  })();
 
   // 從 URL 參數初始化選中的章節和題型
   useEffect(() => {
@@ -101,9 +301,48 @@ function AdminPageContent() {
     return () => window.removeEventListener('focus', handleFocus);
   }, [selectedChapter, selectedType]);
 
+  // 讓選中的章節自動展開
+  useEffect(() => {
+    if (selectedChapter) {
+      setExpandedChapterId(selectedChapter);
+    }
+  }, [selectedChapter]);
+
+  // 預設展開所有群組（依年級/學期）
+  useEffect(() => {
+    if (!filterTerm) {
+      if (expandedGroupKeys.size > 0) {
+        setExpandedGroupKeys(new Set());
+      }
+      return;
+    }
+    if (expandedGroupKeys.size === 0 && groupedChapterList.length > 0) {
+      setExpandedGroupKeys(new Set(groupedChapterList.map((group) => `${group.gradeId}|${group.term}`)));
+    }
+  }, [groupedChapterList, filterTerm, expandedGroupKeys.size]);
+
+  useEffect(() => {
+    if (!selectedChapter || bookChapterTree.length === 0) return;
+    const targetBook = bookChapterTree.find((book) =>
+      book.sections.some((section) => section.items.some((ch) => ch.id === selectedChapter))
+    );
+    if (!targetBook) return;
+    setExpandedBookKeys((prev) => {
+      if (prev.has(targetBook.key)) return prev;
+      const next = new Set(prev);
+      next.add(targetBook.key);
+      return next;
+    });
+  }, [bookChapterTree, selectedChapter]);
+
   const loadChapters = async (preserveSelection = false) => {
     try {
-      const res = await fetch(`/api/admin/chapters?t=${Date.now()}`, {
+      // 建立查詢參數
+      const params = new URLSearchParams({ t: Date.now().toString() });
+      if (filterGradeId) params.append('gradeId', filterGradeId);
+      if (filterTerm) params.append('term', filterTerm);
+
+      const res = await fetch(`/api/admin/chapters?${params.toString()}`, {
         method: 'GET',
         credentials: 'include', // 確保包含 cookies
       });
@@ -118,28 +357,47 @@ function AdminPageContent() {
       const data = await res.json();
       if (data.data) {
         const currentSelected = selectedChapter;
-        setChapters(data.data);
-        console.log('載入的章節列表:', data.data.map((ch: Chapter) => ch.id));
+        const allChapters = data.data;
+        setChapters(allChapters);
+        
+        // 套用篩選
+        let filtered = allChapters;
+        if (filterGradeId) {
+          filtered = filtered.filter((ch: Chapter) => ch.grade_id === filterGradeId);
+        }
+        if (filterTerm) {
+          filtered = filtered.filter((ch: Chapter) => ch.term === filterTerm);
+        }
+        setFilteredChapters(filtered);
+        
+        console.log('載入的章節列表:', allChapters.map((ch: Chapter) => ch.id));
+        console.log('篩選後的章節列表:', filtered.map((ch: Chapter) => ch.id));
         
         const urlChapter = searchParams.get('chapter');
         const urlType = searchParams.get('type');
         
-        if (data.data.length > 0) {
-          if (urlChapter && data.data.find((ch: Chapter) => ch.id === urlChapter)) {
+        // 從篩選後的列表中選擇章節
+        if (filtered.length > 0) {
+          if (urlChapter && filtered.find((ch: Chapter) => ch.id === urlChapter)) {
             setSelectedChapter(urlChapter);
           } else if (preserveSelection && currentSelected) {
             // 保留當前選中的章節，如果它仍然存在
-            const stillExists = data.data.find((ch: Chapter) => ch.id === currentSelected);
+            const stillExists = filtered.find((ch: Chapter) => ch.id === currentSelected);
             if (stillExists) {
               setSelectedChapter(currentSelected);
-            } else if (data.data.length > 0) {
+            } else if (filtered.length > 0) {
               // 如果原選中的章節不存在了，選擇第一個
-              setSelectedChapter(data.data[0].id);
+              setSelectedChapter(filtered[0].id);
             }
           } else if (!preserveSelection && !currentSelected) {
             // 只有在沒有選中章節且不需要保留時，才選擇第一個
-            setSelectedChapter(data.data[0].id);
+            setSelectedChapter(filtered[0].id);
           }
+        } else {
+          // 篩選後沒有章節，清除選中狀態
+          setSelectedChapter('');
+          setTypes([]);
+          setQuestions([]);
         }
       } else {
         setError('載入章節失敗：回應格式錯誤');
@@ -150,6 +408,11 @@ function AdminPageContent() {
       console.error('載入章節失敗:', err);
     }
   };
+
+  // 當篩選條件改變時重新載入章節
+  useEffect(() => {
+    loadChapters(true);
+  }, [filterGradeId, filterTerm]);
 
   const loadTypes = async (chapterId: string) => {
     try {
@@ -199,7 +462,7 @@ function AdminPageContent() {
     }
 
     // 檢查章節 ID 是否已存在（前端驗證）
-    const existingChapter = chapters.find(ch => ch.id === newChapterId);
+    const existingChapter = filteredChapters.find(ch => ch.id === newChapterId);
     if (existingChapter) {
       setError(`章節 ID "${newChapterId}" 已存在（目前標題：${existingChapter.title}）。請使用不同的 ID 或編輯現有章節。`);
       return;
@@ -211,13 +474,13 @@ function AdminPageContent() {
       if (insertChapterAfter) {
         if (insertChapterAfter === 'none') {
           // 插入到最後
-          const maxSortOrder = chapters.length > 0 
-            ? Math.max(...chapters.map(ch => ch.sort_order))
+          const maxSortOrder = filteredChapters.length > 0 
+            ? Math.max(...filteredChapters.map(ch => ch.sort_order))
             : 0;
           calculatedSortOrder = maxSortOrder + 1;
         } else {
           // 插入在指定章節之後
-          const afterChapter = chapters.find(ch => ch.id === insertChapterAfter);
+          const afterChapter = filteredChapters.find(ch => ch.id === insertChapterAfter);
           if (afterChapter) {
             calculatedSortOrder = afterChapter.sort_order + 1;
             // 調整其他章節的排序
@@ -239,6 +502,8 @@ function AdminPageContent() {
         body: JSON.stringify({
           id: newChapterId,
           title: newChapterTitle,
+          grade_id: newChapterGradeId,
+          term: newChapterTerm,
           sort_order: calculatedSortOrder,
         }),
       });
@@ -482,6 +747,8 @@ function AdminPageContent() {
     setEditingChapter(chapter.id);
     setEditChapterId(chapter.id);
     setEditChapterTitle(chapter.title);
+    setEditChapterGradeId(chapter.grade_id || 'J1-MATH');
+    setEditChapterTerm(chapter.term || 'upper');
     setEditChapterSortOrder(chapter.sort_order);
     setShowAddChapter(false);
   };
@@ -498,7 +765,7 @@ function AdminPageContent() {
 
     // 如果 ID 有變更，需要警告用戶
     if (editChapterId !== oldId) {
-      const newIdExists = chapters.find(ch => ch.id === editChapterId && ch.id !== oldId);
+      const newIdExists = filteredChapters.find(ch => ch.id === editChapterId && ch.id !== oldId);
       if (newIdExists) {
         setError(`章節 ID "${editChapterId}" 已存在。請使用不同的 ID。`);
         return;
@@ -516,6 +783,8 @@ function AdminPageContent() {
         body: JSON.stringify({
           id: editChapterId !== oldId ? editChapterId : undefined, // 只有 ID 改變時才傳送
           title: editChapterTitle,
+          grade_id: editChapterGradeId,
+          term: editChapterTerm,
           sort_order: editChapterSortOrder,
         }),
       });
@@ -921,6 +1190,27 @@ function AdminPageContent() {
   const [editTeacherClassIds, setEditTeacherClassIds] = useState<Set<string>>(new Set());
   const [updatingTeacher, setUpdatingTeacher] = useState(false);
   const [loadingTeacherClasses, setLoadingTeacherClasses] = useState<string | null>(null);
+
+  // 會考題庫管理狀態
+  const [showExamQuestions, setShowExamQuestions] = useState(false);
+  const [examSubjectTab, setExamSubjectTab] = useState<'math' | 'physics'>('math');
+  const [examQuestions, setExamQuestions] = useState<any[]>([]);
+  const [examLoading, setExamLoading] = useState(false);
+  const [examError, setExamError] = useState('');
+  const [examForm, setExamForm] = useState({
+    year: '',
+    code: '',
+    description: '',
+    options: '',
+    answer: '',
+    explanation: '',
+    difficulty: '',
+    isActive: true,
+  });
+  const [showExamImport, setShowExamImport] = useState(false);
+  const [examImportText, setExamImportText] = useState('');
+  const [examImportLoading, setExamImportLoading] = useState(false);
+  const [examImportResult, setExamImportResult] = useState<{ successCount: number; errorCount: number; errors?: string[] } | null>(null);
 
   const loadStudents = async () => {
     try {
@@ -1401,6 +1691,169 @@ function AdminPageContent() {
     }
   }, [showTeachers]);
 
+  const loadExamQuestions = async () => {
+    setExamLoading(true);
+    setExamError('');
+    try {
+      const res = await fetch(`/api/admin/exam-questions?subject=${examSubjectTab}`);
+      const data = await res.json();
+      if (res.ok && data.data) {
+        setExamQuestions(data.data);
+      } else {
+        setExamError(data.error || '載入題庫失敗');
+      }
+    } catch (err: any) {
+      setExamError(err.message || '載入題庫失敗');
+    } finally {
+      setExamLoading(false);
+    }
+  };
+
+  const parseJsonInput = (value: string) => {
+    if (!value.trim()) return null;
+    return JSON.parse(value);
+  };
+
+  const handleAddExamQuestion = async () => {
+    setExamError('');
+    if (!examForm.code.trim() || !examForm.description.trim() || !examForm.answer.trim()) {
+      setExamError('請填寫必填欄位（代碼、題目、答案）');
+      return;
+    }
+
+    let optionsValue: any = null;
+    try {
+      optionsValue = parseJsonInput(examForm.options);
+      if (optionsValue && !Array.isArray(optionsValue)) {
+        setExamError('選項格式需為 JSON 陣列');
+        return;
+      }
+    } catch (err) {
+      setExamError('選項格式錯誤，請輸入 JSON 陣列');
+      return;
+    }
+
+    let answerValue: any = examForm.answer.trim();
+    try {
+      answerValue = parseJsonInput(examForm.answer);
+    } catch (err) {
+      answerValue = examForm.answer.trim();
+    }
+
+    setExamLoading(true);
+    try {
+      const res = await fetch('/api/admin/exam-questions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject: examSubjectTab,
+          year: examForm.year ? Number(examForm.year) : null,
+          code: examForm.code.trim(),
+          description: examForm.description.trim(),
+          options: optionsValue,
+          answer: answerValue,
+          explanation: examForm.explanation.trim() || null,
+          difficulty: examForm.difficulty.trim() || null,
+          is_active: examForm.isActive,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setExamError(data.error || '新增失敗');
+        return;
+      }
+      setExamForm({
+        year: '',
+        code: '',
+        description: '',
+        options: '',
+        answer: '',
+        explanation: '',
+        difficulty: '',
+        isActive: true,
+      });
+      loadExamQuestions();
+    } catch (err: any) {
+      setExamError(err.message || '新增失敗');
+    } finally {
+      setExamLoading(false);
+    }
+  };
+
+  const handleExamImport = async () => {
+    if (!examImportText.trim()) {
+      setExamError('請輸入 CSV 內容');
+      return;
+    }
+    setExamImportLoading(true);
+    setExamError('');
+    setExamImportResult(null);
+    try {
+      const lines = examImportText.trim().split(/\r?\n/);
+      if (lines.length < 2) {
+        setExamError('CSV 內容至少需要一列標題與一列資料');
+        return;
+      }
+      const headers = lines[0].split(',').map((h) => h.trim());
+      const rows = lines.slice(1).map((line) => {
+        const cols = line.split(',').map((c) => c.trim());
+        const row: any = {};
+        headers.forEach((h, idx) => {
+          row[h] = cols[idx] ?? '';
+        });
+        if (row.options) {
+          try {
+            row.options = JSON.parse(row.options);
+          } catch (err) {
+            row.options = row.options;
+          }
+        }
+        if (row.answer) {
+          try {
+            row.answer = JSON.parse(row.answer);
+          } catch (err) {
+            row.answer = row.answer;
+          }
+        }
+        if (row.year) {
+          row.year = Number(row.year);
+        }
+        if (row.is_active !== undefined && row.is_active !== '') {
+          row.is_active = row.is_active === 'true' || row.is_active === '1';
+        }
+        return row;
+      });
+
+      const res = await fetch('/api/admin/exam-questions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subject: examSubjectTab, records: rows }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setExamError(data.error || '匯入失敗');
+        return;
+      }
+      setExamImportResult({
+        successCount: data.successCount,
+        errorCount: data.errorCount,
+        errors: data.errors,
+      });
+      setExamImportText('');
+      loadExamQuestions();
+    } catch (err: any) {
+      setExamError(err.message || '匯入失敗');
+    } finally {
+      setExamImportLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (showExamQuestions) {
+      loadExamQuestions();
+    }
+  }, [showExamQuestions, examSubjectTab]);
+
   const handleStudentImport = async () => {
     if (!studentImportText.trim()) {
       alert('請輸入 JSON 格式的學生資料');
@@ -1677,10 +2130,17 @@ function AdminPageContent() {
           <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold">題庫管理</h1>
           <div className="flex space-x-2">
+            <Link
+              href="/admin/brand"
+              className="px-4 py-2 bg-teal-500 text-white rounded hover:bg-teal-600"
+            >
+              品牌設定
+            </Link>
             <button
               onClick={() => {
                 setShowStudents(!showStudents);
                 setShowRecipients(false);
+                setShowExamQuestions(false);
               }}
               className="px-4 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-600"
             >
@@ -1691,6 +2151,7 @@ function AdminPageContent() {
                 setShowRecipients(!showRecipients);
                 setShowStudents(false);
                 setShowParentLinks(false);
+                setShowExamQuestions(false);
               }}
               className="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600"
             >
@@ -1702,6 +2163,7 @@ function AdminPageContent() {
                 setShowStudents(false);
                 setShowRecipients(false);
                 setShowTeachers(false);
+                setShowExamQuestions(false);
               }}
               className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
             >
@@ -1714,6 +2176,7 @@ function AdminPageContent() {
                 setShowRecipients(false);
                 setShowParentLinks(false);
                 setShowClasses(false);
+                setShowExamQuestions(false);
               }}
               className="px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600"
             >
@@ -1726,10 +2189,24 @@ function AdminPageContent() {
                 setShowRecipients(false);
                 setShowParentLinks(false);
                 setShowTeachers(false);
+                setShowExamQuestions(false);
               }}
               className="px-4 py-2 bg-teal-500 text-white rounded hover:bg-teal-600"
             >
               {showClasses ? '隱藏班級管理' : '班級管理'}
+            </button>
+            <button
+              onClick={() => {
+                setShowExamQuestions(!showExamQuestions);
+                setShowStudents(false);
+                setShowRecipients(false);
+                setShowParentLinks(false);
+                setShowTeachers(false);
+                setShowClasses(false);
+              }}
+              className="px-4 py-2 bg-amber-500 text-white rounded hover:bg-amber-600"
+            >
+              {showExamQuestions ? '隱藏會考題庫' : '會考弱點分析題庫'}
             </button>
             <Link
               href="/"
@@ -1739,6 +2216,264 @@ function AdminPageContent() {
             </Link>
           </div>
         </div>
+
+        {/* 會考弱點分析題庫 */}
+        {showExamQuestions && (
+          <div className="mb-6 bg-white p-6 rounded-lg shadow-lg">
+            <h2 className="text-2xl font-bold mb-4">會考弱點分析題庫</h2>
+
+            <div className="flex space-x-2 mb-4">
+              <button
+                type="button"
+                onClick={() => setExamSubjectTab('math')}
+                className={`px-3 py-2 rounded text-sm ${
+                  examSubjectTab === 'math'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                數學會考題庫
+              </button>
+              <button
+                type="button"
+                onClick={() => setExamSubjectTab('physics')}
+                className={`px-3 py-2 rounded text-sm ${
+                  examSubjectTab === 'physics'
+                    ? 'bg-green-500 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                理化會考題庫
+              </button>
+            </div>
+
+            {examError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+                {examError}
+              </div>
+            )}
+
+            <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+              <h3 className="font-semibold mb-3">新增題目（單筆）</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">年度（可選）</label>
+                  <input
+                    type="number"
+                    value={examForm.year}
+                    onChange={(e) => setExamForm({ ...examForm, year: e.target.value })}
+                    className="w-full p-2 bg-white text-gray-900 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="例如 2024"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">題目代碼（必填）</label>
+                  <input
+                    type="text"
+                    value={examForm.code}
+                    onChange={(e) => setExamForm({ ...examForm, code: e.target.value })}
+                    className="w-full p-2 bg-white text-gray-900 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="例如 EXAM-001"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">題目內容（必填）</label>
+                  <textarea
+                    value={examForm.description}
+                    onChange={(e) => setExamForm({ ...examForm, description: e.target.value })}
+                    className="w-full p-2 bg-white text-gray-900 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    rows={3}
+                    placeholder="請輸入題目描述"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">選項（JSON 陣列，可選）</label>
+                  <textarea
+                    value={examForm.options}
+                    onChange={(e) => setExamForm({ ...examForm, options: e.target.value })}
+                    className="w-full p-2 bg-white text-gray-900 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs"
+                    rows={3}
+                    placeholder='例如 ["A", "B", "C", "D"]'
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">答案（必填）</label>
+                  <textarea
+                    value={examForm.answer}
+                    onChange={(e) => setExamForm({ ...examForm, answer: e.target.value })}
+                    className="w-full p-2 bg-white text-gray-900 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    rows={2}
+                    placeholder="可輸入文字或 JSON"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">解析（可選）</label>
+                  <textarea
+                    value={examForm.explanation}
+                    onChange={(e) => setExamForm({ ...examForm, explanation: e.target.value })}
+                    className="w-full p-2 bg-white text-gray-900 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    rows={2}
+                    placeholder="解析/說明"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">難度（可選）</label>
+                  <input
+                    type="text"
+                    value={examForm.difficulty}
+                    onChange={(e) => setExamForm({ ...examForm, difficulty: e.target.value })}
+                    className="w-full p-2 bg-white text-gray-900 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="easy / medium / hard"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={examForm.isActive}
+                    onChange={(e) => setExamForm({ ...examForm, isActive: e.target.checked })}
+                  />
+                  <span className="text-sm text-gray-700">啟用</span>
+                </div>
+              </div>
+              <div className="flex space-x-2">
+                <button
+                  onClick={handleAddExamQuestion}
+                  disabled={examLoading}
+                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                >
+                  {examLoading ? '處理中...' : '新增/更新題目'}
+                </button>
+                <button
+                  onClick={() =>
+                    setExamForm({
+                      year: '',
+                      code: '',
+                      description: '',
+                      options: '',
+                      answer: '',
+                      explanation: '',
+                      difficulty: '',
+                      isActive: true,
+                    })
+                  }
+                  className="px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500"
+                >
+                  清除
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                代碼重複會自動更新（upsert）。
+              </p>
+            </div>
+
+            <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold">批次匯入（CSV）</h3>
+                <button
+                  onClick={() => setShowExamImport(!showExamImport)}
+                  className="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
+                >
+                  {showExamImport ? '隱藏匯入' : '顯示匯入'}
+                </button>
+              </div>
+              {showExamImport && (
+                <>
+                  <div className="mb-3 text-xs text-gray-600">
+                    欄位：code,description,answer,year,options,explanation,difficulty,is_active
+                  </div>
+                  <textarea
+                    value={examImportText}
+                    onChange={(e) => setExamImportText(e.target.value)}
+                    className="w-full p-3 bg-white text-gray-900 border border-gray-300 rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 mb-3"
+                    rows={8}
+                    placeholder="code,description,answer,year,options,explanation,difficulty,is_active"
+                  />
+
+                  {examImportResult && (
+                    <div className={`mb-3 p-3 rounded ${
+                      examImportResult.successCount > 0
+                        ? 'bg-green-50 border border-green-200'
+                        : 'bg-red-50 border border-red-200'
+                    }`}>
+                      <p className={`font-semibold ${
+                        examImportResult.successCount > 0 ? 'text-green-900' : 'text-red-900'
+                      }`}>
+                        成功匯入 {examImportResult.successCount} 筆
+                        {examImportResult.errorCount > 0 && `，失敗 ${examImportResult.errorCount} 筆`}
+                      </p>
+                      {examImportResult.errors && examImportResult.errors.length > 0 && (
+                        <ul className="mt-2 text-sm text-red-700 list-disc list-inside">
+                          {examImportResult.errors.map((err, idx) => (
+                            <li key={idx}>{err}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={handleExamImport}
+                      disabled={examImportLoading || !examImportText.trim()}
+                      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                    >
+                      {examImportLoading ? '匯入中...' : '開始匯入'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowExamImport(false);
+                        setExamImportText('');
+                        setExamImportResult(null);
+                      }}
+                      className="px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500"
+                    >
+                      取消
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div>
+              <h3 className="font-semibold mb-3">題庫列表</h3>
+              {examLoading ? (
+                <p className="text-sm text-gray-500">載入中...</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left p-2">代碼</th>
+                        <th className="text-left p-2">題目</th>
+                        <th className="text-center p-2">年度</th>
+                        <th className="text-center p-2">狀態</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {examQuestions.map((q) => (
+                        <tr key={q.id} className="border-b hover:bg-gray-50">
+                          <td className="p-2 font-medium">{q.code}</td>
+                          <td className="p-2 text-xs text-gray-700">{q.description}</td>
+                          <td className="p-2 text-center text-xs text-gray-600">{q.year || '-'}</td>
+                          <td className="p-2 text-center">
+                            <span className={`px-2 py-1 rounded text-xs ${
+                              q.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                            }`}>
+                              {q.is_active ? '啟用' : '停用'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {examQuestions.length === 0 && (
+                    <p className="text-center text-gray-500 py-4">尚無題目</p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* 學生管理區塊 */}
         {showStudents && (
@@ -2894,6 +3629,36 @@ function AdminPageContent() {
                   />
                 </div>
                 <div className="mb-2">
+                  <label className="block text-sm font-medium mb-1">年級（科目）</label>
+                  <select
+                    value={newChapterGradeId}
+                    onChange={(e) => setNewChapterGradeId(e.target.value as GradeId)}
+                    className="w-full p-2 bg-white text-gray-900 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  >
+                    {GRADES.map((grade) => (
+                      <option key={grade.id} value={grade.id}>
+                        {grade.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="mb-2">
+                  <label className="block text-sm font-medium mb-1">學期</label>
+                  <select
+                    value={newChapterTerm}
+                    onChange={(e) => setNewChapterTerm(e.target.value as Term)}
+                    className="w-full p-2 bg-white text-gray-900 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  >
+                    {TERMS.map((term) => (
+                      <option key={term.id} value={term.id}>
+                        {term.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="mb-2">
                   <label className="block text-sm font-medium mb-1">插入位置</label>
                   <select
                     value={insertChapterAfter}
@@ -2901,13 +3666,13 @@ function AdminPageContent() {
                       setInsertChapterAfter(e.target.value);
                       if (e.target.value === 'none') {
                         // 插入到最後
-                        const maxSortOrder = chapters.length > 0 
-                          ? Math.max(...chapters.map(ch => ch.sort_order))
+                        const maxSortOrder = filteredChapters.length > 0 
+                          ? Math.max(...filteredChapters.map(ch => ch.sort_order))
                           : 0;
                         setNewChapterSortOrder(maxSortOrder + 1);
                       } else if (e.target.value) {
                         // 插入在指定章節之後
-                        const afterChapter = chapters.find(ch => ch.id === e.target.value);
+                        const afterChapter = filteredChapters.find(ch => ch.id === e.target.value);
                         if (afterChapter) {
                           setNewChapterSortOrder(afterChapter.sort_order + 1);
                         }
@@ -2917,10 +3682,14 @@ function AdminPageContent() {
                   >
                     <option value="">不使用插入（手動設定排序）</option>
                     <option value="none">插入到最後</option>
-                    {chapters.map((ch) => (
-                      <option key={ch.id} value={ch.id}>
-                        插入在「{ch.id} - {ch.title}」之後
-                      </option>
+                    {groupedChapterList.map((group) => (
+                      <optgroup key={`${group.gradeId}-${group.term}`} label={group.label}>
+                        {group.items.map((ch) => (
+                          <option key={ch.id} value={ch.id}>
+                            插入在「{ch.id} - {ch.title}」之後
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                 </div>
@@ -2946,20 +3715,256 @@ function AdminPageContent() {
               </form>
             )}
 
-            <select
-              value={selectedChapter}
-              onChange={(e) => {
-                setSelectedChapter(e.target.value);
-                setEditingChapter(null);
-              }}
-              className="w-full p-2 bg-white text-gray-900 border border-gray-300 rounded mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              {chapters.map((ch) => (
-                <option key={ch.id} value={ch.id}>
-                  {ch.id} - {ch.title}
-                </option>
-              ))}
-            </select>
+            <div className="mb-2">
+              <label className="block text-sm font-medium mb-1">科目</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedSubject('math');
+                    setSelectedChapter('');
+                    setSelectedType('');
+                    setTypes([]);
+                    setQuestions([]);
+                  }}
+                  className={`px-3 py-2 text-sm rounded border ${
+                    selectedSubject === 'math'
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  數學
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedSubject('science');
+                    setSelectedChapter('');
+                    setSelectedType('');
+                    setTypes([]);
+                    setQuestions([]);
+                  }}
+                  className={`px-3 py-2 text-sm rounded border ${
+                    selectedSubject === 'science'
+                      ? 'bg-emerald-600 text-white border-emerald-600'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  理化
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const confirmed = window.confirm(
+                    '確定要清除科目選擇嗎？\n\n影響：目前選擇的科目、章節與題型會被清空，題目列表也會重置。'
+                  );
+                  if (!confirmed) return;
+                  setSelectedSubject('');
+                  setSelectedChapter('');
+                  setSelectedType('');
+                  setTypes([]);
+                  setQuestions([]);
+                }}
+                className="mt-2 text-xs text-gray-500 hover:text-gray-700 underline"
+              >
+                清除科目選擇
+              </button>
+            </div>
+
+            <div className="mb-2">
+              <div
+                className={`w-full p-2 border rounded text-left ${
+                  selectedSubject ? 'bg-white text-gray-900 border-gray-300' : 'bg-gray-100 text-gray-400 border-gray-200'
+                }`}
+              >
+                {selectedSubject ? '請選擇章節' : '請先選擇科目'}
+              </div>
+              <div className={`mt-2 border rounded bg-white ${!selectedSubject ? 'opacity-60' : ''}`}>
+                {!selectedSubject ? (
+                  <div className="p-3 text-sm text-gray-500">請先選擇科目</div>
+                ) : bookChapterTree.length > 0 ? (
+                  bookChapterTree.map((book) => {
+                    const bookOpen = expandedBookKeys.has(book.key);
+                    return (
+                      <div key={book.key} className="border-b last:border-b-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setExpandedBookKeys((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(book.key)) {
+                                next.delete(book.key);
+                              } else {
+                                next.add(book.key);
+                              }
+                              return next;
+                            });
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm font-semibold bg-gray-50 text-gray-800"
+                        >
+                          {bookOpen ? '[-] ' : '[+] '} {book.title}
+                        </button>
+                        {bookOpen && (
+                          <div className="pl-4 py-1">
+                            {book.sections.map((section) => {
+                              const sectionKey = `${book.key}|${section.title}`;
+                              const sectionOpen = expandedChapterGroupKeys.has(sectionKey);
+                              return (
+                                <div key={sectionKey} className="border-l border-gray-200">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setExpandedChapterGroupKeys((prev) => {
+                                        const next = new Set(prev);
+                                        if (next.has(sectionKey)) {
+                                          next.delete(sectionKey);
+                                        } else {
+                                          next.add(sectionKey);
+                                        }
+                                        return next;
+                                      });
+                                    }}
+                                    className="w-full text-left px-3 py-2 text-sm font-medium hover:bg-gray-50"
+                                  >
+                                    {sectionOpen ? '[-] ' : '[+] '} {section.title}
+                                  </button>
+                                  {sectionOpen && (
+                                    <div className="pl-4 py-1">
+                                      {section.items.map((ch) => {
+                                        const isExpanded = expandedChapterId === ch.id;
+                                        const sectionCode = ch.id.replace(/^[a-z]\d+-/i, '');
+                                        return (
+                                          <div key={ch.id}>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setSelectedChapter(ch.id);
+                                                setEditingChapter(null);
+                                                setExpandedChapterId((prev) => (prev === ch.id ? '' : ch.id));
+                                              }}
+                                              className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 ${
+                                                ch.id === selectedChapter ? 'bg-gray-100 font-medium' : ''
+                                              }`}
+                                            >
+                                              {isExpanded ? '[-] ' : '[+] '} {sectionCode} {ch.title}
+                                            </button>
+                                            {isExpanded && selectedChapter === ch.id && (
+                                              <div className="pl-6 py-2 border-l border-gray-200">
+                                                {types.length === 0 ? (
+                                                  <div className="text-xs text-gray-500">尚無題型</div>
+                                                ) : (
+                                                  <div className="space-y-1">
+                                                    {types.map((type) => (
+                                                      <button
+                                                        key={type.id}
+                                                        type="button"
+                                                        onClick={() => setSelectedType(type.id)}
+                                                        className={`w-full text-left text-xs px-2 py-1 rounded hover:bg-gray-100 ${
+                                                          type.id === selectedType ? 'bg-blue-100 text-blue-700' : 'text-gray-700'
+                                                        }`}
+                                                      >
+                                                        {type.code} - {type.name}
+                                                      </button>
+                                                    ))}
+                                                  </div>
+                                                )}
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                ) : groupedChapterList.length === 0 ? (
+                  <div className="p-3 text-sm text-gray-500">尚無章節</div>
+                ) : (
+                  groupedChapterList.map((group) => {
+                    const groupKey = `${group.gradeId}|${group.term}`;
+                    const groupOpen = expandedGroupKeys.has(groupKey);
+                    return (
+                      <div key={groupKey} className="border-b last:border-b-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setExpandedGroupKeys((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(groupKey)) {
+                                next.delete(groupKey);
+                              } else {
+                                next.add(groupKey);
+                              }
+                              return next;
+                            });
+                          }}
+                          className={`w-full text-left px-3 py-2 text-sm font-semibold ${
+                            group.term === 'upper'
+                              ? 'bg-blue-50 text-blue-700'
+                              : 'bg-emerald-50 text-emerald-700'
+                          }`}
+                        >
+                          {groupOpen ? '[-] ' : '[+] '} {group.label}
+                        </button>
+                        {groupOpen && (
+                          <div className="pl-4 py-1">
+                            {group.items.map((ch) => {
+                              const isExpanded = expandedChapterId === ch.id;
+                              return (
+                                <div key={ch.id}>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedChapter(ch.id);
+                                      setEditingChapter(null);
+                                      setExpandedChapterId((prev) => (prev === ch.id ? '' : ch.id));
+                                    }}
+                                    className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 ${
+                                      ch.id === selectedChapter ? 'bg-gray-100 font-medium' : ''
+                                    }`}
+                                  >
+                                    {isExpanded ? '[-] ' : '[+] '} {ch.title}
+                                  </button>
+                                  {isExpanded && selectedChapter === ch.id && (
+                                    <div className="pl-6 py-2 border-l border-gray-200">
+                                      {types.length === 0 ? (
+                                        <div className="text-xs text-gray-500">尚無題型</div>
+                                      ) : (
+                                        <div className="space-y-1">
+                                          {types.map((type) => (
+                                            <button
+                                              key={type.id}
+                                              type="button"
+                                              onClick={() => setSelectedType(type.id)}
+                                              className={`w-full text-left text-xs px-2 py-1 rounded hover:bg-gray-100 ${
+                                                type.id === selectedType ? 'bg-blue-100 text-blue-700' : 'text-gray-700'
+                                              }`}
+                                            >
+                                              {type.code} - {type.name}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
 
             {selectedChapter && (
               <div className="space-y-2 mb-6">
@@ -2991,6 +3996,36 @@ function AdminPageContent() {
                       />
                     </div>
                     <div className="mb-2">
+                      <label className="block text-sm font-medium mb-1">年級（科目）</label>
+                      <select
+                        value={editChapterGradeId}
+                        onChange={(e) => setEditChapterGradeId(e.target.value as GradeId)}
+                        className="w-full p-2 bg-white text-gray-900 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        required
+                      >
+                        {GRADES.map((grade) => (
+                          <option key={grade.id} value={grade.id}>
+                            {grade.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium mb-1">學期</label>
+                      <select
+                        value={editChapterTerm}
+                        onChange={(e) => setEditChapterTerm(e.target.value as Term)}
+                        className="w-full p-2 bg-white text-gray-900 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        required
+                      >
+                        {TERMS.map((term) => (
+                          <option key={term.id} value={term.id}>
+                            {term.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="mb-2">
                       <label className="block text-sm font-medium mb-1">排序順序</label>
                       <input
                         type="number"
@@ -3018,7 +4053,7 @@ function AdminPageContent() {
                   <>
                     <button
                       onClick={() => {
-                        const chapter = chapters.find(ch => ch.id === selectedChapter);
+                        const chapter = filteredChapters.find(ch => ch.id === selectedChapter);
                         if (chapter) handleEditChapter(chapter);
                       }}
                       className="w-full px-3 py-2 bg-blue-500 text-white text-sm rounded hover:bg-blue-600"
