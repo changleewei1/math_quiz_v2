@@ -1789,14 +1789,42 @@ function AdminPageContent() {
     setExamError('');
     setExamImportResult(null);
     try {
+      const parseCsvLine = (line: string) => {
+        const result: string[] = [];
+        let current = '';
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i];
+          if (char === '"') {
+            const next = line[i + 1];
+            if (inQuotes && next === '"') {
+              current += '"';
+              i++;
+              continue;
+            }
+            inQuotes = !inQuotes;
+            continue;
+          }
+          if (char === ',' && !inQuotes) {
+            result.push(current);
+            current = '';
+            continue;
+          }
+          current += char;
+        }
+        result.push(current);
+        return result.map((value) => value.trim());
+      };
+
       const lines = examImportText.trim().split(/\r?\n/);
       if (lines.length < 2) {
         setExamError('CSV 內容至少需要一列標題與一列資料');
         return;
       }
-      const headers = lines[0].split(',').map((h) => h.trim());
+      const headers = parseCsvLine(lines[0]);
       const rows = lines.slice(1).map((line) => {
-        const cols = line.split(',').map((c) => c.trim());
+        if (!line.trim()) return null;
+        const cols = parseCsvLine(line);
         const row: any = {};
         headers.forEach((h, idx) => {
           row[h] = cols[idx] ?? '';
@@ -1822,7 +1850,7 @@ function AdminPageContent() {
           row.is_active = row.is_active === 'true' || row.is_active === '1';
         }
         return row;
-      });
+      }).filter(Boolean);
 
       const res = await fetch('/api/admin/exam-questions', {
         method: 'POST',
