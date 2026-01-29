@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import type { Chapter, QuestionTypeData, Question } from '@/types';
 import QuestionRenderer from '@/components/questions/QuestionRenderer';
+import { isAnswerMatch } from '@/lib/answerMatch';
 
 type Difficulty = 'easy' | 'medium' | 'hard';
 type Term = 'upper' | 'lower';
@@ -39,6 +40,8 @@ function PracticePageContent() {
   const [completed, setCompleted] = useState(false);
   const [student, setStudent] = useState<{ id: string; name: string } | null>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [feedback, setFeedback] = useState<{ type: 'correct' | 'wrong'; message: string } | null>(null);
+  const feedbackTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [selectedGrade, setSelectedGrade] = useState<'1' | '2' | '3'>(() =>
     grade === '1' || grade === '2' || grade === '3' ? grade : '1'
   );
@@ -233,6 +236,14 @@ function PracticePageContent() {
   }, [student, subject, grade]);
 
   useEffect(() => {
+    return () => {
+      if (feedbackTimerRef.current) {
+        clearTimeout(feedbackTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (!skillId && selectedChapter) {
       loadTypes(selectedChapter);
     }
@@ -400,6 +411,42 @@ function PracticePageContent() {
     }
   };
 
+  const playFeedbackTone = (type: 'correct' | 'wrong') => {
+    try {
+      const AudioContextClass =
+        window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const audioCtx = new AudioContextClass();
+      const oscillator = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.value = type === 'correct' ? 880 : 220;
+      gain.gain.value = 0.15;
+      oscillator.connect(gain);
+      gain.connect(audioCtx.destination);
+      oscillator.start();
+      setTimeout(() => {
+        oscillator.stop();
+        audioCtx.close();
+      }, 180);
+    } catch {
+      // Ignore audio errors (autoplay policy, etc.)
+    }
+  };
+
+  const showFeedback = (type: 'correct' | 'wrong') => {
+    setFeedback({
+      type,
+      message: type === 'correct' ? '作答正確！' : '作答錯誤！',
+    });
+    if (feedbackTimerRef.current) {
+      clearTimeout(feedbackTimerRef.current);
+    }
+    feedbackTimerRef.current = setTimeout(() => {
+      setFeedback(null);
+    }, 1000);
+  };
+
   const handleSubmit = async () => {
     if (!currentQuestion || !sessionId) return;
 
@@ -408,7 +455,7 @@ function PracticePageContent() {
     if (currentQuestion.qtype === 'mcq') {
       isCorrect = selectedChoiceIndex === currentQuestion.correct_choice_index;
     } else {
-      isCorrect = userAnswer.trim() === currentQuestion.answer.trim();
+      isCorrect = isAnswerMatch(userAnswer, currentQuestion.answer);
     }
 
     // 提交作答記錄
@@ -435,6 +482,9 @@ function PracticePageContent() {
     }
 
     // 狀態機邏輯
+    showFeedback(isCorrect ? 'correct' : 'wrong');
+    playFeedbackTone(isCorrect ? 'correct' : 'wrong');
+
     if (isCorrect) {
       const newStreak = streak + 1;
       setStreak(newStreak);
@@ -845,6 +895,17 @@ function PracticePageContent() {
             </span>
           </div>
           <QuestionRenderer prompt={currentQuestion.prompt} media={currentQuestion.media} className="mb-6" />
+          {feedback && (
+            <div
+              className={`mb-4 rounded px-4 py-2 text-sm font-semibold ${
+                feedback.type === 'correct'
+                  ? 'bg-green-50 text-green-700 border border-green-200'
+                  : 'bg-red-50 text-red-700 border border-red-200'
+              }`}
+            >
+              {feedback.message}
+            </div>
+          )}
 
           {currentQuestion.qtype === 'mcq' && currentQuestion.choices ? (
             <div className="space-y-2 mb-6">

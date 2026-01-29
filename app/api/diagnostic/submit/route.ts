@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { getStudentSession } from '@/lib/studentAuth';
 import { buildDailyPracticeSummary } from '@/lib/dailyPracticeReport';
+import { isAnswerMatch } from '@/lib/answerMatch';
 
 export async function POST(request: NextRequest) {
   try {
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
       if (qtype === 'mcq') {
         isCorrect = selectedChoiceIndex === question?.correct_choice_index;
       } else {
-        isCorrect = userAnswer?.trim() === question?.answer?.trim();
+        isCorrect = isAnswerMatch(String(userAnswer || ''), String(question?.answer || ''));
       }
 
       // 記錄 attempt

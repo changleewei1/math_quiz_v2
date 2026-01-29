@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import BrandHeader from '@/components/BrandHeader';
+import { isAnswerMatch } from '@/lib/answerMatch';
 
 type ExamQuestion = {
   id: string;
@@ -21,6 +22,8 @@ export default function ExamDiagnosticMathPage() {
   const [started, setStarted] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [feedbackMap, setFeedbackMap] = useState<Record<string, 'correct' | 'wrong'>>({});
+  const feedbackTimersRef = useRef<Record<string, NodeJS.Timeout>>({});
 
   const loadQuestions = async () => {
     setLoading(true);
@@ -45,13 +48,56 @@ export default function ExamDiagnosticMathPage() {
     loadQuestions();
   }, []);
 
+  useEffect(() => {
+    return () => {
+      Object.values(feedbackTimersRef.current).forEach((timer) => clearTimeout(timer));
+    };
+  }, []);
+
+  const playFeedbackTone = (type: 'correct' | 'wrong') => {
+    try {
+      const AudioContextClass =
+        window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const audioCtx = new AudioContextClass();
+      const oscillator = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.value = type === 'correct' ? 880 : 220;
+      gain.gain.value = 0.15;
+      oscillator.connect(gain);
+      gain.connect(audioCtx.destination);
+      oscillator.start();
+      setTimeout(() => {
+        oscillator.stop();
+        audioCtx.close();
+      }, 180);
+    } catch {
+      // Ignore audio errors
+    }
+  };
+
+  const showFeedback = (questionId: string, type: 'correct' | 'wrong') => {
+    setFeedbackMap((prev) => ({ ...prev, [questionId]: type }));
+    if (feedbackTimersRef.current[questionId]) {
+      clearTimeout(feedbackTimersRef.current[questionId]);
+    }
+    feedbackTimersRef.current[questionId] = setTimeout(() => {
+      setFeedbackMap((prev) => {
+        const next = { ...prev };
+        delete next[questionId];
+        return next;
+      });
+    }, 1000);
+  };
+
   const result = useMemo(() => {
     if (!submitted) return { correct: 0, total: 0, accuracy: 0 };
     let correct = 0;
     questions.forEach((q) => {
       const userAnswer = answers[q.id] ?? '';
       const expected = Array.isArray(q.answer) ? JSON.stringify(q.answer) : String(q.answer ?? '');
-      if (userAnswer.trim() === expected.trim()) {
+      if (isAnswerMatch(userAnswer, expected)) {
         correct += 1;
       }
     });
@@ -65,7 +111,7 @@ export default function ExamDiagnosticMathPage() {
     return questions.filter((q) => {
       const userAnswer = answers[q.id] ?? '';
       const expected = Array.isArray(q.answer) ? JSON.stringify(q.answer) : String(q.answer ?? '');
-      return userAnswer.trim() !== expected.trim();
+      return !isAnswerMatch(userAnswer, expected);
     });
   }, [submitted, answers, questions]);
 
@@ -176,6 +222,33 @@ export default function ExamDiagnosticMathPage() {
                         placeholder="請輸入答案"
                       />
                     )}
+                    <div className="mt-3 flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const userAnswer = answers[q.id] ?? '';
+                          const expected = Array.isArray(q.answer)
+                            ? JSON.stringify(q.answer)
+                            : String(q.answer ?? '');
+                          const isCorrect = isAnswerMatch(userAnswer, expected);
+                          showFeedback(q.id, isCorrect ? 'correct' : 'wrong');
+                          playFeedbackTone(isCorrect ? 'correct' : 'wrong');
+                        }}
+                        disabled={!answers[q.id]?.trim()}
+                        className="px-4 py-2 text-sm rounded bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50"
+                      >
+                        檢查答案
+                      </button>
+                      {feedbackMap[q.id] && (
+                        <span
+                          className={`text-sm font-semibold ${
+                            feedbackMap[q.id] === 'correct' ? 'text-green-600' : 'text-red-600'
+                          }`}
+                        >
+                          {feedbackMap[q.id] === 'correct' ? '作答正確！' : '作答錯誤！'}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 ))}
                 <button

@@ -3,8 +3,10 @@ import type { NextRequest } from 'next/server';
 
 const ADMIN_COOKIE_NAME = process.env.ADMIN_COOKIE_NAME || 'admin_session';
 const TEACHER_COOKIE_NAME = process.env.TEACHER_COOKIE_NAME || 'teacher_session';
+const STUDENT_COOKIE_NAME = process.env.STUDENT_COOKIE_NAME || 'student_session';
 const ADMIN_COOKIE_SECRET = process.env.ADMIN_COOKIE_SECRET || '';
 const TEACHER_COOKIE_SECRET = process.env.TEACHER_COOKIE_SECRET || process.env.ADMIN_COOKIE_SECRET || '';
+const STUDENT_COOKIE_SECRET = process.env.STUDENT_COOKIE_SECRET || process.env.ADMIN_COOKIE_SECRET || '';
 
 // Edge Runtime 版本的 verifyCookie，使用 Web Crypto API
 async function verifyCookie(signedValue: string, secret: string): Promise<string | null> {
@@ -125,11 +127,62 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // 保護學生頁面與 API
+  const isStudentPage =
+    path.startsWith('/practice') ||
+    path.startsWith('/diagnostic');
+  const isStudentApi =
+    path.startsWith('/api/practice') ||
+    path.startsWith('/api/diagnostic') ||
+    path.startsWith('/api/student');
+
+  if (isStudentPage || isStudentApi) {
+    if (path === '/api/student/login') {
+      return NextResponse.next();
+    }
+
+    const cookie = request.cookies.get(STUDENT_COOKIE_NAME);
+    if (!cookie) {
+      if (isStudentApi) {
+        return NextResponse.json(
+          { error: '未授權，請先登入' },
+          { status: 401 }
+        );
+      }
+      const loginUrl = new URL('/login', request.url);
+      loginUrl.searchParams.set('redirect', path);
+      return NextResponse.redirect(loginUrl);
+    }
+
+    const verified = await verifyCookie(cookie.value, STUDENT_COOKIE_SECRET);
+    if (!verified) {
+      if (isStudentApi) {
+        return NextResponse.json(
+          { error: '未授權，請先登入' },
+          { status: 401 }
+        );
+      }
+      const loginUrl = new URL('/login', request.url);
+      loginUrl.searchParams.set('redirect', path);
+      return NextResponse.redirect(loginUrl);
+    }
+  }
+
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/api/admin/:path*', '/teacher/:path*', '/api/teacher/:path*'],
+  matcher: [
+    '/admin/:path*',
+    '/api/admin/:path*',
+    '/teacher/:path*',
+    '/api/teacher/:path*',
+    '/practice/:path*',
+    '/diagnostic/:path*',
+    '/api/practice/:path*',
+    '/api/diagnostic/:path*',
+    '/api/student/:path*',
+  ],
 };
 
 

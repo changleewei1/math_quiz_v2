@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import QuestionRenderer from '@/components/questions/QuestionRenderer';
+import { isAnswerMatch } from '@/lib/answerMatch';
 
 type AnswerState = Record<
   string,
@@ -18,6 +19,8 @@ export default function DiagnosticSessionPage() {
   const [answers, setAnswers] = useState<AnswerState>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [feedbackMap, setFeedbackMap] = useState<Record<string, 'correct' | 'wrong'>>({});
+  const feedbackTimersRef = useRef<Record<string, NodeJS.Timeout>>({});
 
   useEffect(() => {
     const loadSession = async () => {
@@ -36,6 +39,49 @@ export default function DiagnosticSessionPage() {
     };
     loadSession();
   }, [params.id]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(feedbackTimersRef.current).forEach((timer) => clearTimeout(timer));
+    };
+  }, []);
+
+  const playFeedbackTone = (type: 'correct' | 'wrong') => {
+    try {
+      const AudioContextClass =
+        window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const audioCtx = new AudioContextClass();
+      const oscillator = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.value = type === 'correct' ? 880 : 220;
+      gain.gain.value = 0.15;
+      oscillator.connect(gain);
+      gain.connect(audioCtx.destination);
+      oscillator.start();
+      setTimeout(() => {
+        oscillator.stop();
+        audioCtx.close();
+      }, 180);
+    } catch {
+      // Ignore audio errors
+    }
+  };
+
+  const showFeedback = (questionId: string, type: 'correct' | 'wrong') => {
+    setFeedbackMap((prev) => ({ ...prev, [questionId]: type }));
+    if (feedbackTimersRef.current[questionId]) {
+      clearTimeout(feedbackTimersRef.current[questionId]);
+    }
+    feedbackTimersRef.current[questionId] = setTimeout(() => {
+      setFeedbackMap((prev) => {
+        const next = { ...prev };
+        delete next[questionId];
+        return next;
+      });
+    }, 1000);
+  };
 
   const handleSubmit = async () => {
     setLoading(true);
@@ -155,6 +201,36 @@ export default function DiagnosticSessionPage() {
                   placeholder="請輸入答案"
                 />
               )}
+              <div className="mt-3 flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const isCorrect =
+                      q.qtype === 'mcq'
+                        ? answers[q.id]?.selectedChoiceIndex === q.correct_choice_index
+                        : isAnswerMatch(String(answers[q.id]?.userAnswer || ''), String(q.answer || ''));
+                    showFeedback(q.id, isCorrect ? 'correct' : 'wrong');
+                    playFeedbackTone(isCorrect ? 'correct' : 'wrong');
+                  }}
+                  disabled={
+                    q.qtype === 'mcq'
+                      ? answers[q.id]?.selectedChoiceIndex === undefined
+                      : !answers[q.id]?.userAnswer?.trim()
+                  }
+                  className="px-4 py-2 text-sm rounded bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50"
+                >
+                  檢查答案
+                </button>
+                {feedbackMap[q.id] && (
+                  <span
+                    className={`text-sm font-semibold ${
+                      feedbackMap[q.id] === 'correct' ? 'text-green-600' : 'text-red-600'
+                    }`}
+                  >
+                    {feedbackMap[q.id] === 'correct' ? '作答正確！' : '作答錯誤！'}
+                  </span>
+                )}
+              </div>
             </div>
           ))}
         </div>

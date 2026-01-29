@@ -1,7 +1,7 @@
 -- 診斷模式資料表（全部使用 text PK / FK）
 CREATE TABLE IF NOT EXISTS diagnostic_sessions (
     id TEXT PRIMARY KEY,
-    student_id TEXT REFERENCES students(id) ON DELETE SET NULL,
+    student_id UUID REFERENCES students(id) ON DELETE SET NULL,
     subject TEXT NOT NULL,
     scope_type TEXT NOT NULL CHECK (scope_type IN ('chapter', 'book', 'exam')),
     scope_ref JSONB NOT NULL,
@@ -19,7 +19,7 @@ CREATE INDEX IF NOT EXISTS idx_diagnostic_sessions_scope_type ON diagnostic_sess
 CREATE TABLE IF NOT EXISTS diagnostic_answers (
     id TEXT PRIMARY KEY,
     diagnostic_session_id TEXT NOT NULL REFERENCES diagnostic_sessions(id) ON DELETE CASCADE,
-    question_id TEXT NOT NULL REFERENCES questions(id) ON DELETE SET NULL,
+    question_id UUID NOT NULL REFERENCES questions(id) ON DELETE SET NULL,
     chapter_id TEXT NOT NULL,
     is_correct BOOLEAN NOT NULL,
     user_answer JSONB,
@@ -43,9 +43,9 @@ CREATE INDEX IF NOT EXISTS idx_diagnostic_results_session ON diagnostic_results(
 CREATE TABLE IF NOT EXISTS remediation_actions (
     id TEXT PRIMARY KEY,
     diagnostic_session_id TEXT NOT NULL REFERENCES diagnostic_sessions(id) ON DELETE CASCADE,
-    student_id TEXT NOT NULL REFERENCES students(id) ON DELETE SET NULL,
+    student_id UUID NOT NULL REFERENCES students(id) ON DELETE SET NULL,
     chapter_id TEXT NOT NULL,
-    assigned_by_teacher_id TEXT REFERENCES teachers(id) ON DELETE SET NULL,
+    assigned_by_teacher_id UUID REFERENCES teachers(id) ON DELETE SET NULL,
     action_type TEXT NOT NULL CHECK (action_type IN ('practice', 'video', 'worksheet', 'custom')),
     action_payload JSONB NOT NULL,
     status TEXT DEFAULT 'assigned',

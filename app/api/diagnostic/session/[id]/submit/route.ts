@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { nanoid } from 'nanoid';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { analyzeDiagnosticSession } from '@/lib/diagnostic/analyzeDiagnosticSession';
+import { isAnswerMatch } from '@/lib/answerMatch';
 
 export async function POST(
   request: NextRequest,
@@ -40,7 +41,7 @@ export async function POST(
       const isCorrect =
         question.qtype === 'mcq'
           ? answer.selectedChoiceIndex === question.correct_choice_index
-          : String(answer.userAnswer || '').trim() === String(question.answer || '').trim();
+          : isAnswerMatch(String(answer.userAnswer || ''), String(question.answer || ''));
       return {
         id: `da_${nanoid(12)}`,
         diagnostic_session_id: sessionId,
