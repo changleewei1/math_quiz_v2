@@ -207,7 +207,16 @@ export default function ExamDiagnosticPhysicsPage() {
                               name={`q-${q.id}`}
                               value={opt}
                               checked={answers[q.id] === opt}
-                              onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setAnswers({ ...answers, [q.id]: value });
+                                const expected = Array.isArray(q.answer)
+                                  ? JSON.stringify(q.answer)
+                                  : String(q.answer ?? '');
+                                const isCorrect = isAnswerMatch(value, expected);
+                                showFeedback(q.id, isCorrect ? 'correct' : 'wrong');
+                                playFeedbackTone(isCorrect ? 'correct' : 'wrong');
+                              }}
                             />
                             <span>{opt}</span>
                           </label>
@@ -218,37 +227,30 @@ export default function ExamDiagnosticPhysicsPage() {
                         type="text"
                         value={answers[q.id] || ''}
                         onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })}
+                        onBlur={() => {
+                          const value = answers[q.id] || '';
+                          const expected = Array.isArray(q.answer)
+                            ? JSON.stringify(q.answer)
+                            : String(q.answer ?? '');
+                          if (value.trim()) {
+                            const isCorrect = isAnswerMatch(value, expected);
+                            showFeedback(q.id, isCorrect ? 'correct' : 'wrong');
+                            playFeedbackTone(isCorrect ? 'correct' : 'wrong');
+                          }
+                        }}
                         className="w-full p-2 bg-white text-gray-900 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="請輸入答案"
                       />
                     )}
-                    <div className="mt-3 flex items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const userAnswer = answers[q.id] ?? '';
-                          const expected = Array.isArray(q.answer)
-                            ? JSON.stringify(q.answer)
-                            : String(q.answer ?? '');
-                          const isCorrect = isAnswerMatch(userAnswer, expected);
-                          showFeedback(q.id, isCorrect ? 'correct' : 'wrong');
-                          playFeedbackTone(isCorrect ? 'correct' : 'wrong');
-                        }}
-                        disabled={!answers[q.id]?.trim()}
-                        className="px-4 py-2 text-sm rounded bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50"
-                      >
-                        檢查答案
-                      </button>
-                      {feedbackMap[q.id] && (
+                    {feedbackMap[q.id] && (
+                      <div className="mt-3 text-sm font-semibold">
                         <span
-                          className={`text-sm font-semibold ${
-                            feedbackMap[q.id] === 'correct' ? 'text-green-600' : 'text-red-600'
-                          }`}
+                          className={feedbackMap[q.id] === 'correct' ? 'text-green-600' : 'text-red-600'}
                         >
                           {feedbackMap[q.id] === 'correct' ? '作答正確！' : '作答錯誤！'}
                         </span>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                 ))}
                 <button

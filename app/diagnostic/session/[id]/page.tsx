@@ -175,12 +175,15 @@ export default function DiagnosticSessionPage() {
                         name={`q-${q.id}`}
                         value={i}
                         checked={answers[q.id]?.selectedChoiceIndex === i}
-                        onChange={() =>
+                        onChange={() => {
                           setAnswers({
                             ...answers,
                             [q.id]: { ...answers[q.id], selectedChoiceIndex: i },
-                          })
-                        }
+                          });
+                          const isCorrect = i === q.correct_choice_index;
+                          showFeedback(q.id, isCorrect ? 'correct' : 'wrong');
+                          playFeedbackTone(isCorrect ? 'correct' : 'wrong');
+                        }}
                         className="mr-2"
                       />
                       {choice}
@@ -197,40 +200,29 @@ export default function DiagnosticSessionPage() {
                       [q.id]: { ...answers[q.id], userAnswer: e.target.value },
                     })
                   }
+                  onBlur={() => {
+                    const isCorrect = isAnswerMatch(
+                      String(answers[q.id]?.userAnswer || ''),
+                      String(q.answer || '')
+                    );
+                    if (answers[q.id]?.userAnswer?.trim()) {
+                      showFeedback(q.id, isCorrect ? 'correct' : 'wrong');
+                      playFeedbackTone(isCorrect ? 'correct' : 'wrong');
+                    }
+                  }}
                   className="w-full p-2 bg-white text-gray-900 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder:text-gray-400"
                   placeholder="請輸入答案"
                 />
               )}
-              <div className="mt-3 flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const isCorrect =
-                      q.qtype === 'mcq'
-                        ? answers[q.id]?.selectedChoiceIndex === q.correct_choice_index
-                        : isAnswerMatch(String(answers[q.id]?.userAnswer || ''), String(q.answer || ''));
-                    showFeedback(q.id, isCorrect ? 'correct' : 'wrong');
-                    playFeedbackTone(isCorrect ? 'correct' : 'wrong');
-                  }}
-                  disabled={
-                    q.qtype === 'mcq'
-                      ? answers[q.id]?.selectedChoiceIndex === undefined
-                      : !answers[q.id]?.userAnswer?.trim()
-                  }
-                  className="px-4 py-2 text-sm rounded bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50"
-                >
-                  檢查答案
-                </button>
-                {feedbackMap[q.id] && (
+              {feedbackMap[q.id] && (
+                <div className="mt-3 text-sm font-semibold">
                   <span
-                    className={`text-sm font-semibold ${
-                      feedbackMap[q.id] === 'correct' ? 'text-green-600' : 'text-red-600'
-                    }`}
+                    className={feedbackMap[q.id] === 'correct' ? 'text-green-600' : 'text-red-600'}
                   >
                     {feedbackMap[q.id] === 'correct' ? '作答正確！' : '作答錯誤！'}
                   </span>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
