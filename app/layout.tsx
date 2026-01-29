@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Inter, Noto_Serif_TC } from "next/font/google";
 import "./globals.css";
 import { getBrandSettings } from "@/lib/brandSettings";
-import IdleLogoutProvider from "./IdleLogoutProvider";
 
 const inter = Inter({ 
   subsets: ["latin"], 
@@ -48,7 +47,7 @@ export default async function RootLayout({
         className={`${inter.variable} ${notoSerifTC.variable}`}
         style={{ fontFamily: brandSettings.font_family }}
       >
-        <IdleLogoutProvider>{children}</IdleLogoutProvider>
+        {children}
       </body>
     </html>
   );
