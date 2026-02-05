@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseServer } from '@/lib/supabaseServer';
+import { supabaseAdmin } from '@/lib/supabaseServer';
 import { verifyAdminCookie } from '@/lib/adminAuth';
 
 export async function GET(request: NextRequest) {
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const supabase = supabaseServer();
+    const supabase = supabaseAdmin();
     const { data: members, error } = await supabase
       .from('class_members')
       .select('*, students(id, name)')
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = supabaseServer();
+    const supabase = supabaseAdmin();
     const { data, error } = await supabase
       .from('class_members')
       .insert([{ class_id, student_id, student_number }])

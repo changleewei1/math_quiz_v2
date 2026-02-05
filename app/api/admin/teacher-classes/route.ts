@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseServer } from '@/lib/supabaseServer';
+import { supabaseAdmin } from '@/lib/supabaseServer';
 import { verifyAdminCookie } from '@/lib/adminAuth';
 
 // 取得老師管理的班級列表
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const supabase = supabaseServer();
+    const supabase = supabaseAdmin();
     const { data: teacherClasses, error } = await supabase
       .from('teacher_classes')
       .select('class_id')
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = supabaseServer();
+    const supabase = supabaseAdmin();
 
     // 刪除現有關聯
     const { error: deleteError } = await supabase

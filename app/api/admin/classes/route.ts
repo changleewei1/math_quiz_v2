@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseServer } from '@/lib/supabaseServer';
+import { supabaseAdmin } from '@/lib/supabaseServer';
 import { verifyAdminCookie } from '@/lib/adminAuth';
 
 export async function GET(request: NextRequest) {
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const supabase = supabaseServer();
+    const supabase = supabaseAdmin();
     // 管理員可以查看所有班級（包括停用的），以便管理
     const { data: classes, error } = await supabase
       .from('classes')
@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = supabaseServer();
+    const supabase = supabaseAdmin();
     const { data, error } = await supabase
       .from('classes')
       .insert([{ name, school_year, semester }])
@@ -92,7 +92,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const supabase = supabaseServer();
+    const supabase = supabaseAdmin();
 
     const { data, error } = await supabase
       .from('classes')
@@ -133,7 +133,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const supabase = supabaseServer();
+    const supabase = supabaseAdmin();
     const { error } = await supabase
       .from('classes')
       .delete()

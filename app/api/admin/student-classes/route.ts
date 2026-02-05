@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseServer } from '@/lib/supabaseServer';
+import { supabaseAdmin } from '@/lib/supabaseServer';
 import { verifyAdminCookie } from '@/lib/adminAuth';
 
 // 取得學生所屬的班級列表
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const supabase = supabaseServer();
+    const supabase = supabaseAdmin();
     const { data: studentClasses, error } = await supabase
       .from('class_members')
       .select('class_id')
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = supabaseServer();
+    const supabase = supabaseAdmin();
 
     // 先停用所有現有關聯（軟刪除）
     const { error: deactivateError } = await supabase
