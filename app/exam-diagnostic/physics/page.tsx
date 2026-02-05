@@ -24,6 +24,9 @@ export default function ExamDiagnosticPhysicsPage() {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [feedbackMap, setFeedbackMap] = useState<Record<string, 'correct' | 'wrong'>>({});
   const feedbackTimersRef = useRef<Record<string, NodeJS.Timeout>>({});
+  const sessionStartTimeRef = useRef<number | null>(null);
+  const sessionTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [sessionElapsedMs, setSessionElapsedMs] = useState(0);
 
   const loadQuestions = async () => {
     setLoading(true);
@@ -51,8 +54,25 @@ export default function ExamDiagnosticPhysicsPage() {
   useEffect(() => {
     return () => {
       Object.values(feedbackTimersRef.current).forEach((timer) => clearTimeout(timer));
+      if (sessionTimerRef.current) {
+        clearInterval(sessionTimerRef.current);
+      }
     };
   }, []);
+
+  useEffect(() => {
+    if (!started) return;
+    sessionStartTimeRef.current = Date.now();
+    setSessionElapsedMs(0);
+    if (sessionTimerRef.current) {
+      clearInterval(sessionTimerRef.current);
+    }
+    sessionTimerRef.current = setInterval(() => {
+      if (sessionStartTimeRef.current !== null) {
+        setSessionElapsedMs(Math.max(0, Date.now() - sessionStartTimeRef.current));
+      }
+    }, 1000);
+  }, [started]);
 
   const playFeedbackTone = (type: 'correct' | 'wrong') => {
     try {
@@ -105,6 +125,34 @@ export default function ExamDiagnosticPhysicsPage() {
     const accuracy = total === 0 ? 0 : correct / total;
     return { correct, total, accuracy };
   }, [submitted, answers, questions]);
+
+  const answeredStats = useMemo(() => {
+    let answeredCount = 0;
+    let correctCount = 0;
+    questions.forEach((q) => {
+      const userAnswer = answers[q.id];
+      const hasAnswer = userAnswer !== undefined && String(userAnswer).trim().length > 0;
+      if (!hasAnswer) return;
+      answeredCount += 1;
+      const expected = Array.isArray(q.answer) ? JSON.stringify(q.answer) : String(q.answer ?? '');
+      if (isAnswerMatch(String(userAnswer), expected)) {
+        correctCount += 1;
+      }
+    });
+    return { answeredCount, correctCount };
+  }, [answers, questions]);
+
+  const formatDuration = (timeMs: number) => {
+    const totalSeconds = Math.floor(timeMs / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return {
+      hours: String(hours).padStart(2, '0'),
+      minutes: String(minutes).padStart(2, '0'),
+      seconds: String(seconds).padStart(2, '0'),
+    };
+  };
 
   const wrongQuestions = useMemo(() => {
     if (!submitted) return [];
@@ -180,8 +228,9 @@ export default function ExamDiagnosticPhysicsPage() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <BrandHeader />
       <div className="flex items-center justify-center min-h-[calc(100vh-120px)] py-8 px-4">
-        <div className="max-w-4xl w-full">
-          <div className="bg-white rounded-lg shadow-xl p-5 sm:p-6 lg:p-8">
+        <div className="max-w-6xl w-full flex flex-col lg:flex-row gap-6">
+          <div className="flex-1">
+            <div className="bg-white rounded-lg shadow-xl p-5 sm:p-6 lg:p-8">
             <h2 className="text-3xl sm:text-4xl font-bold text-center mb-6 sm:mb-8 text-gray-800">
               理化會考弱點分析
             </h2>
@@ -306,6 +355,52 @@ export default function ExamDiagnosticPhysicsPage() {
                 </Link>
               </div>
             )}
+            </div>
+          </div>
+          <div className="lg:w-64">
+            <div className="bg-white rounded-lg shadow p-4 lg:sticky lg:top-6">
+              <div className="text-center">
+                <div className="bg-lime-500 text-white rounded-t-lg py-3 font-semibold">
+                  Questions answered
+                </div>
+                <div className="text-4xl font-bold text-gray-700 py-6 border-x border-b">
+                  {answeredStats.answeredCount} / {questions.length}
+                </div>
+                <div className="bg-sky-500 text-white py-3 font-semibold">
+                  Time elapsed
+                </div>
+                <div className="border-x border-b py-4">
+                  {(() => {
+                    const { hours, minutes, seconds } = formatDuration(sessionElapsedMs);
+                    return (
+                      <div className="flex justify-center gap-2 text-gray-700">
+                        <div className="text-center">
+                          <div className="px-2 py-1 border rounded text-lg font-semibold">{hours}</div>
+                          <div className="text-xs text-gray-400 mt-1">HR</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="px-2 py-1 border rounded text-lg font-semibold">{minutes}</div>
+                          <div className="text-xs text-gray-400 mt-1">MIN</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="px-2 py-1 border rounded text-lg font-semibold">{seconds}</div>
+                          <div className="text-xs text-gray-400 mt-1">SEC</div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+                <div className="bg-orange-500 text-white py-3 font-semibold flex items-center justify-center gap-2">
+                  SmartScore out of 100
+                  <span className="w-5 h-5 rounded-full bg-white/20 text-xs flex items-center justify-center">?</span>
+                </div>
+                <div className="text-4xl font-bold text-gray-700 py-6 border-x border-b rounded-b-lg">
+                  {answeredStats.answeredCount === 0
+                    ? 0
+                    : Math.round((answeredStats.correctCount / answeredStats.answeredCount) * 100)}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

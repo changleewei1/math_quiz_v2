@@ -8,7 +8,7 @@ import { isAnswerMatch } from '@/lib/answerMatch';
 
 type AnswerState = Record<
   string,
-  { userAnswer?: string; selectedChoiceIndex?: number; timeSpent?: number }
+  { userAnswer?: string; selectedChoiceIndex?: number; timeSpentMs?: number }
 >;
 
 export default function DiagnosticSessionPage() {
@@ -21,6 +21,10 @@ export default function DiagnosticSessionPage() {
   const [error, setError] = useState('');
   const [feedbackMap, setFeedbackMap] = useState<Record<string, 'correct' | 'wrong'>>({});
   const feedbackTimersRef = useRef<Record<string, NodeJS.Timeout>>({});
+  const questionStartTimesRef = useRef<Record<string, number>>({});
+  const sessionStartTimeRef = useRef<number | null>(null);
+  const sessionTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [sessionElapsedMs, setSessionElapsedMs] = useState(0);
 
   useEffect(() => {
     const loadSession = async () => {
@@ -33,6 +37,16 @@ export default function DiagnosticSessionPage() {
         }
         setSession(data.session);
         setQuestions(data.questions || []);
+        sessionStartTimeRef.current = Date.now();
+        setSessionElapsedMs(0);
+        if (sessionTimerRef.current) {
+          clearInterval(sessionTimerRef.current);
+        }
+        sessionTimerRef.current = setInterval(() => {
+          if (sessionStartTimeRef.current !== null) {
+            setSessionElapsedMs(Math.max(0, Date.now() - sessionStartTimeRef.current));
+          }
+        }, 1000);
       } catch (err: any) {
         setError(err.message || '載入診斷失敗');
       }
@@ -43,6 +57,9 @@ export default function DiagnosticSessionPage() {
   useEffect(() => {
     return () => {
       Object.values(feedbackTimersRef.current).forEach((timer) => clearTimeout(timer));
+      if (sessionTimerRef.current) {
+        clearInterval(sessionTimerRef.current);
+      }
     };
   }, []);
 
@@ -83,16 +100,63 @@ export default function DiagnosticSessionPage() {
     }, 1000);
   };
 
+  const answeredStats = useMemo(() => {
+    let answeredCount = 0;
+    let correctCount = 0;
+    questions.forEach((q) => {
+      const answerEntry = answers[q.id];
+      const hasAnswer =
+        typeof answerEntry?.selectedChoiceIndex === 'number' ||
+        (answerEntry?.userAnswer && answerEntry.userAnswer.trim().length > 0);
+      if (!hasAnswer) return;
+      answeredCount += 1;
+      const isCorrect =
+        q.qtype === 'mcq'
+          ? answerEntry?.selectedChoiceIndex === q.correct_choice_index
+          : isAnswerMatch(String(answerEntry?.userAnswer || ''), String(q.answer || ''));
+      if (isCorrect) correctCount += 1;
+    });
+    return { answeredCount, correctCount };
+  }, [answers, questions]);
+
+  const formatDuration = (timeMs: number) => {
+    const totalSeconds = Math.floor(timeMs / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return {
+      hours: String(hours).padStart(2, '0'),
+      minutes: String(minutes).padStart(2, '0'),
+      seconds: String(seconds).padStart(2, '0'),
+    };
+  };
+
+  const ensureQuestionStart = (questionId: string) => {
+    if (!questionStartTimesRef.current[questionId]) {
+      questionStartTimesRef.current[questionId] = Date.now();
+    }
+  };
+
   const handleSubmit = async () => {
     setLoading(true);
     setError('');
     try {
-      const payload = questions.map((q) => ({
-        questionId: q.id,
-        userAnswer: answers[q.id]?.userAnswer || '',
-        selectedChoiceIndex: answers[q.id]?.selectedChoiceIndex,
-        timeSpent: answers[q.id]?.timeSpent || 0,
-      }));
+      const now = Date.now();
+      const payload = questions.map((q) => {
+        const answerEntry = answers[q.id];
+        const hasAnswer =
+          typeof answerEntry?.selectedChoiceIndex === 'number' ||
+          (answerEntry?.userAnswer && answerEntry.userAnswer.trim().length > 0);
+        return {
+          questionId: q.id,
+          userAnswer: answerEntry?.userAnswer || '',
+          selectedChoiceIndex: answerEntry?.selectedChoiceIndex,
+          timeSpentMs:
+            hasAnswer && typeof questionStartTimesRef.current[q.id] === 'number'
+              ? Math.max(0, Math.round(now - questionStartTimesRef.current[q.id]))
+              : null,
+        };
+      });
 
       const res = await fetch(`/api/diagnostic/session/${params.id}/submit`, {
         method: 'POST',
@@ -137,7 +201,8 @@ export default function DiagnosticSessionPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-6xl mx-auto flex flex-col lg:flex-row gap-6">
+        <div className="flex-1">
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-3xl font-bold">弱點分析測驗</h1>
@@ -176,6 +241,7 @@ export default function DiagnosticSessionPage() {
                         value={i}
                         checked={answers[q.id]?.selectedChoiceIndex === i}
                         onChange={() => {
+                          ensureQuestionStart(q.id);
                           setAnswers({
                             ...answers,
                             [q.id]: { ...answers[q.id], selectedChoiceIndex: i },
@@ -194,6 +260,8 @@ export default function DiagnosticSessionPage() {
                 <input
                   type="text"
                   value={answers[q.id]?.userAnswer || ''}
+                  onFocus={() => ensureQuestionStart(q.id)}
+                  onKeyDown={() => ensureQuestionStart(q.id)}
                   onChange={(e) =>
                     setAnswers({
                       ...answers,
@@ -235,6 +303,52 @@ export default function DiagnosticSessionPage() {
           >
             {loading ? '提交中...' : '提交作答'}
           </button>
+        </div>
+        </div>
+        <div className="lg:w-64">
+          <div className="bg-white rounded-lg shadow p-4 lg:sticky lg:top-6">
+            <div className="text-center">
+              <div className="bg-lime-500 text-white rounded-t-lg py-3 font-semibold">
+                Questions answered
+              </div>
+              <div className="text-4xl font-bold text-gray-700 py-6 border-x border-b">
+                {answeredStats.answeredCount} / {questions.length}
+              </div>
+              <div className="bg-sky-500 text-white py-3 font-semibold">
+                Time elapsed
+              </div>
+              <div className="border-x border-b py-4">
+                {(() => {
+                  const { hours, minutes, seconds } = formatDuration(sessionElapsedMs);
+                  return (
+                    <div className="flex justify-center gap-2 text-gray-700">
+                      <div className="text-center">
+                        <div className="px-2 py-1 border rounded text-lg font-semibold">{hours}</div>
+                        <div className="text-xs text-gray-400 mt-1">HR</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="px-2 py-1 border rounded text-lg font-semibold">{minutes}</div>
+                        <div className="text-xs text-gray-400 mt-1">MIN</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="px-2 py-1 border rounded text-lg font-semibold">{seconds}</div>
+                        <div className="text-xs text-gray-400 mt-1">SEC</div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+              <div className="bg-orange-500 text-white py-3 font-semibold flex items-center justify-center gap-2">
+                SmartScore out of 100
+                <span className="w-5 h-5 rounded-full bg-white/20 text-xs flex items-center justify-center">?</span>
+              </div>
+              <div className="text-4xl font-bold text-gray-700 py-6 border-x border-b rounded-b-lg">
+                {answeredStats.answeredCount === 0
+                  ? 0
+                  : Math.round((answeredStats.correctCount / answeredStats.answeredCount) * 100)}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

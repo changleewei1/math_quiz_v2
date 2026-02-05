@@ -42,6 +42,25 @@ function PracticePageContent() {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [feedback, setFeedback] = useState<{ type: 'correct' | 'wrong'; message: string } | null>(null);
   const feedbackTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const questionStartTimeRef = useRef<number | null>(null);
+  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const sessionStartTimeRef = useRef<number | null>(null);
+  const sessionTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [sessionElapsedMs, setSessionElapsedMs] = useState(0);
+  const [answeredCount, setAnsweredCount] = useState(0);
+  const [correctCount, setCorrectCount] = useState(0);
+  const [attempts, setAttempts] = useState<
+    Array<{
+      id: string;
+      question_id: string | null;
+      prompt_snapshot: string | null;
+      time_spent_ms: number | null;
+      is_correct: boolean;
+    }>
+  >([]);
+  const [attemptsLoading, setAttemptsLoading] = useState(false);
+  const [attemptsError, setAttemptsError] = useState('');
   const [selectedGrade, setSelectedGrade] = useState<'1' | '2' | '3'>(() =>
     grade === '1' || grade === '2' || grade === '3' ? grade : '1'
   );
@@ -240,8 +259,36 @@ function PracticePageContent() {
       if (feedbackTimerRef.current) {
         clearTimeout(feedbackTimerRef.current);
       }
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+      }
+      if (sessionTimerRef.current) {
+        clearInterval(sessionTimerRef.current);
+      }
     };
   }, []);
+
+  useEffect(() => {
+    if (!completed || !sessionId) return;
+    const loadAttempts = async () => {
+      setAttemptsLoading(true);
+      setAttemptsError('');
+      try {
+        const res = await fetch(`/api/practice/session/${sessionId}/result`);
+        const data = await res.json();
+        if (!res.ok) {
+          setAttemptsError(data.error || '載入練習結果失敗');
+          return;
+        }
+        setAttempts(data.attempts || []);
+      } catch (err: any) {
+        setAttemptsError(err.message || '載入練習結果失敗');
+      } finally {
+        setAttemptsLoading(false);
+      }
+    };
+    loadAttempts();
+  }, [completed, sessionId]);
 
   useEffect(() => {
     if (!skillId && selectedChapter) {
@@ -362,6 +409,18 @@ function PracticePageContent() {
 
       setSessionId(sessionData.session.id);
       setStarted(true);
+      setAnsweredCount(0);
+      setCorrectCount(0);
+      sessionStartTimeRef.current = Date.now();
+      setSessionElapsedMs(0);
+      if (sessionTimerRef.current) {
+        clearInterval(sessionTimerRef.current);
+      }
+      sessionTimerRef.current = setInterval(() => {
+        if (sessionStartTimeRef.current !== null) {
+          setSessionElapsedMs(Math.max(0, Date.now() - sessionStartTimeRef.current));
+        }
+      }, 1000);
       loadNextQuestion();
     } catch (err) {
       setError('啟動失敗');
@@ -398,6 +457,16 @@ function PracticePageContent() {
           }
           setUserAnswer('');
           setSelectedChoiceIndex(null);
+          questionStartTimeRef.current = Date.now();
+          setElapsedMs(0);
+          if (timerIntervalRef.current) {
+            clearInterval(timerIntervalRef.current);
+          }
+          timerIntervalRef.current = setInterval(() => {
+            if (questionStartTimeRef.current !== null) {
+              setElapsedMs(Math.max(0, Date.now() - questionStartTimeRef.current));
+            }
+          }, 200);
         } else {
           setError(data.error || '題庫不足，請至後台補題');
         }
@@ -449,6 +518,15 @@ function PracticePageContent() {
 
   const handleSubmit = async () => {
     if (!currentQuestion || !sessionId) return;
+    const now = Date.now();
+    const timeSpentMs =
+      questionStartTimeRef.current !== null
+        ? Math.max(0, Math.round(now - questionStartTimeRef.current))
+        : null;
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
 
     // 判斷答案
     let isCorrect = false;
@@ -474,7 +552,7 @@ function PracticePageContent() {
           userAnswer: userAnswer || null,
           selectedChoiceIndex: selectedChoiceIndex || null,
           isCorrect,
-          timeSpent: 0, // 簡化，實際可計算時間
+          timeSpentMs,
         }),
       });
     } catch (err) {
@@ -486,6 +564,7 @@ function PracticePageContent() {
     playFeedbackTone(isCorrect ? 'correct' : 'wrong');
 
     if (isCorrect) {
+      setCorrectCount((prev) => prev + 1);
       const newStreak = streak + 1;
       setStreak(newStreak);
 
@@ -509,11 +588,17 @@ function PracticePageContent() {
 
       const newStreak10 = streak10 + 1;
       setStreak10(newStreak10);
+      setAnsweredCount((prev) => prev + 1);
       if (newStreak10 >= 10) {
         setCompleted(true);
+        if (sessionTimerRef.current) {
+          clearInterval(sessionTimerRef.current);
+          sessionTimerRef.current = null;
+        }
         return;
       }
     } else {
+      setAnsweredCount((prev) => prev + 1);
       // 答錯
       if (difficulty === 'easy' || difficulty === 'medium') {
         setDifficulty('easy');
@@ -529,6 +614,33 @@ function PracticePageContent() {
     setTimeout(() => {
       loadNextQuestion();
     }, 1000);
+  };
+
+  const formatTime = (timeMs: number) => {
+    if (timeMs >= 60000) {
+      const totalSeconds = Math.round(timeMs / 1000);
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+      return `${minutes}:${String(seconds).padStart(2, '0')}`;
+    }
+    return `${(timeMs / 1000).toFixed(1)} 秒`;
+  };
+
+  const formatAttemptTime = (timeMs: number | null) => {
+    if (typeof timeMs !== 'number') return '—';
+    return formatTime(timeMs);
+  };
+
+  const formatDuration = (timeMs: number) => {
+    const totalSeconds = Math.floor(timeMs / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return {
+      hours: String(hours).padStart(2, '0'),
+      minutes: String(minutes).padStart(2, '0'),
+      seconds: String(seconds).padStart(2, '0'),
+    };
   };
 
   if (checkingAuth) {
@@ -599,9 +711,18 @@ function PracticePageContent() {
   })();
 
   if (completed) {
+    const timedAttempts = attempts.filter((a) => typeof a.time_spent_ms === 'number');
+    const averageTimeMs =
+      timedAttempts.length > 0
+        ? timedAttempts.reduce((sum, a) => sum + (a.time_spent_ms || 0), 0) / timedAttempts.length
+        : null;
+    const slowestAttempts = [...timedAttempts]
+      .sort((a, b) => (b.time_spent_ms || 0) - (a.time_spent_ms || 0))
+      .slice(0, 3);
+
     return (
       <div className="min-h-screen bg-gray-50 p-4 flex items-center justify-center">
-        <div className="bg-white p-8 rounded-lg shadow-lg text-center max-w-md relative">
+        <div className="bg-white p-8 rounded-lg shadow-lg text-center max-w-2xl w-full relative">
           <div className="absolute top-4 right-4">
             <Link
               href="/"
@@ -614,6 +735,52 @@ function PracticePageContent() {
           <p className="text-gray-600 mb-6">
             您已連續答對 10 題，完成此題型的練習！
           </p>
+          <div className="text-left bg-gray-50 border rounded-lg p-4 mb-6">
+            <h2 className="text-lg font-semibold mb-3">本次練習耗時</h2>
+            {attemptsLoading && <p className="text-sm text-gray-500">載入中...</p>}
+            {attemptsError && <p className="text-sm text-red-600">{attemptsError}</p>}
+            {!attemptsLoading && !attemptsError && (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <p className="text-sm text-gray-600">平均每題</p>
+                    <p className="text-xl font-semibold">
+                      {averageTimeMs === null ? '—' : formatTime(averageTimeMs)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">最慢 Top 3</p>
+                    <div className="space-y-1 text-sm text-gray-700">
+                      {slowestAttempts.length === 0 && <p>—</p>}
+                      {slowestAttempts.map((attempt, idx) => (
+                        <div key={attempt.id} className="flex justify-between gap-2">
+                          <span className="truncate">
+                            {idx + 1}. {attempt.prompt_snapshot || attempt.question_id}
+                          </span>
+                          <span className="whitespace-nowrap text-gray-500">
+                            {formatAttemptTime(attempt.time_spent_ms)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-2 text-sm text-gray-700 max-h-60 overflow-y-auto border-t pt-3">
+                  {attempts.length === 0 && <p>—</p>}
+                  {attempts.map((attempt, idx) => (
+                    <div key={attempt.id} className="flex justify-between gap-2">
+                      <span className="truncate">
+                        第 {idx + 1} 題：{attempt.prompt_snapshot || attempt.question_id}
+                      </span>
+                      <span className="whitespace-nowrap text-gray-500">
+                        {formatAttemptTime(attempt.time_spent_ms)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
           <div className="flex space-x-4 justify-center">
             <button
               onClick={() => {
@@ -623,6 +790,12 @@ function PracticePageContent() {
                 setStreak(0);
                 setHardStreak(0);
                 setDifficulty('easy');
+                setAttempts([]);
+                setAttemptsError('');
+                setAnsweredCount(0);
+                setCorrectCount(0);
+                setSessionElapsedMs(0);
+                sessionStartTimeRef.current = null;
               }}
               className="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
             >
@@ -870,7 +1043,8 @@ function PracticePageContent() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-6xl mx-auto flex flex-col lg:flex-row gap-6">
+        <div className="flex-1">
         <div className="bg-white p-6 rounded-lg shadow mb-4">
           <div className="flex justify-between items-center mb-4">
             <div className="flex-1">
@@ -889,9 +1063,12 @@ function PracticePageContent() {
         </div>
 
         <div className="bg-white p-6 rounded-lg shadow">
-          <div className="mb-4">
+          <div className="mb-4 flex items-center justify-between">
             <span className="text-sm text-gray-500">
               {currentQuestion.difficulty} | {currentQuestion.qtype}
+            </span>
+            <span className="text-sm text-gray-600">
+              本題計時：{formatTime(elapsedMs)}
             </span>
           </div>
           <QuestionRenderer prompt={currentQuestion.prompt} media={currentQuestion.media} className="mb-6" />
@@ -947,6 +1124,50 @@ function PracticePageContent() {
           >
             {loading ? '提交中...' : '提交答案'}
           </button>
+        </div>
+        </div>
+        <div className="lg:w-64">
+          <div className="bg-white rounded-lg shadow p-4 lg:sticky lg:top-6">
+            <div className="text-center">
+              <div className="bg-lime-500 text-white rounded-t-lg py-3 font-semibold">
+                Questions answered
+              </div>
+              <div className="text-4xl font-bold text-gray-700 py-6 border-x border-b">
+                {answeredCount}
+              </div>
+              <div className="bg-sky-500 text-white py-3 font-semibold">
+                Time elapsed
+              </div>
+              <div className="border-x border-b py-4">
+                {(() => {
+                  const { hours, minutes, seconds } = formatDuration(sessionElapsedMs);
+                  return (
+                    <div className="flex justify-center gap-2 text-gray-700">
+                      <div className="text-center">
+                        <div className="px-2 py-1 border rounded text-lg font-semibold">{hours}</div>
+                        <div className="text-xs text-gray-400 mt-1">HR</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="px-2 py-1 border rounded text-lg font-semibold">{minutes}</div>
+                        <div className="text-xs text-gray-400 mt-1">MIN</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="px-2 py-1 border rounded text-lg font-semibold">{seconds}</div>
+                        <div className="text-xs text-gray-400 mt-1">SEC</div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+              <div className="bg-orange-500 text-white py-3 font-semibold flex items-center justify-center gap-2">
+                SmartScore out of 100
+                <span className="w-5 h-5 rounded-full bg-white/20 text-xs flex items-center justify-center">?</span>
+              </div>
+              <div className="text-4xl font-bold text-gray-700 py-6 border-x border-b rounded-b-lg">
+                {answeredCount === 0 ? 0 : Math.round((correctCount / answeredCount) * 100)}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
