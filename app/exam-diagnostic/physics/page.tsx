@@ -376,15 +376,15 @@ export default function ExamDiagnosticPhysicsPage() {
                       <div className="flex justify-center gap-2 text-gray-700">
                         <div className="text-center">
                           <div className="px-2 py-1 border rounded text-lg font-semibold">{hours}</div>
-                          <div className="text-xs text-gray-400 mt-1">HR</div>
+                          <div className="text-xs text-gray-400 mt-1">時</div>
                         </div>
                         <div className="text-center">
                           <div className="px-2 py-1 border rounded text-lg font-semibold">{minutes}</div>
-                          <div className="text-xs text-gray-400 mt-1">MIN</div>
+                          <div className="text-xs text-gray-400 mt-1">分</div>
                         </div>
                         <div className="text-center">
                           <div className="px-2 py-1 border rounded text-lg font-semibold">{seconds}</div>
-                          <div className="text-xs text-gray-400 mt-1">SEC</div>
+                          <div className="text-xs text-gray-400 mt-1">秒</div>
                         </div>
                       </div>
                     );
