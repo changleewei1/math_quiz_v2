@@ -123,6 +123,60 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const {
+      id,
+      subject,
+      year,
+      code,
+      description,
+      options,
+      answer,
+      explanation,
+      difficulty,
+      is_active,
+    } = body || {};
+
+    if (!id) {
+      return NextResponse.json({ error: '缺少 id' }, { status: 400 });
+    }
+    if (!code || !description || answer === undefined || answer === null) {
+      return NextResponse.json({ error: '缺少必要欄位' }, { status: 400 });
+    }
+
+    const supabase = supabaseServer();
+
+    const payload = {
+      year: year ? Number(year) : null,
+      code,
+      description,
+      options: options ?? null,
+      answer,
+      explanation: explanation || null,
+      difficulty: difficulty || null,
+      is_active: typeof is_active === 'boolean' ? is_active : true,
+    };
+
+    let query = supabase.from('exam_questions').update(payload).eq('id', id);
+    if (subject) {
+      query = query.eq('subject', subject);
+    }
+
+    const { data, error } = await query.select().single();
+
+    if (error) throw error;
+
+    return NextResponse.json({ data });
+  } catch (error: any) {
+    return NextResponse.json(
+      { error: error.message || '更新失敗' },
+      { status: 500 }
+    );
+  }
+}
+
 export async function DELETE(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));

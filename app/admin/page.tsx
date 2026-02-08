@@ -1199,6 +1199,7 @@ function AdminPageContent() {
   const [examError, setExamError] = useState('');
   const [examDeleteLoading, setExamDeleteLoading] = useState(false);
   const [selectedExamIds, setSelectedExamIds] = useState<Set<string>>(new Set());
+  const [editingExamId, setEditingExamId] = useState<string | null>(null);
   const [examForm, setExamForm] = useState({
     year: '',
     code: '',
@@ -1745,24 +1746,30 @@ function AdminPageContent() {
 
     setExamLoading(true);
     try {
+      const method = editingExamId ? 'PATCH' : 'POST';
+      const payload: any = {
+        subject: examSubjectTab,
+        year: examForm.year ? Number(examForm.year) : null,
+        code: examForm.code.trim(),
+        description: examForm.description.trim(),
+        options: optionsValue,
+        answer: answerValue,
+        explanation: examForm.explanation.trim() || null,
+        difficulty: examForm.difficulty.trim() || null,
+        is_active: examForm.isActive,
+      };
+      if (editingExamId) {
+        payload.id = editingExamId;
+      }
+
       const res = await fetch('/api/admin/exam-questions', {
-        method: 'POST',
+        method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          subject: examSubjectTab,
-          year: examForm.year ? Number(examForm.year) : null,
-          code: examForm.code.trim(),
-          description: examForm.description.trim(),
-          options: optionsValue,
-          answer: answerValue,
-          explanation: examForm.explanation.trim() || null,
-          difficulty: examForm.difficulty.trim() || null,
-          is_active: examForm.isActive,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) {
-        setExamError(data.error || '新增失敗');
+        setExamError(data.error || (editingExamId ? '更新失敗' : '新增失敗'));
         return;
       }
       setExamForm({
@@ -1775,15 +1782,17 @@ function AdminPageContent() {
         difficulty: '',
         isActive: true,
       });
+      setEditingExamId(null);
       loadExamQuestions();
     } catch (err: any) {
-      setExamError(err.message || '新增失敗');
+      setExamError(err.message || (editingExamId ? '更新失敗' : '新增失敗'));
     } finally {
       setExamLoading(false);
     }
   };
 
   const handleEditExamQuestion = (q: any) => {
+    setEditingExamId(q.id);
     setExamForm({
       year: q.year ? String(q.year) : '',
       code: q.code || '',
@@ -2438,8 +2447,28 @@ function AdminPageContent() {
                   disabled={examLoading}
                   className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
                 >
-                  {examLoading ? '處理中...' : '插入/更新題目'}
+                  {examLoading ? '處理中...' : editingExamId ? '更新題目' : '插入/新增題目'}
                 </button>
+                {editingExamId && (
+                  <button
+                    onClick={() => {
+                      setEditingExamId(null);
+                      setExamForm({
+                        year: '',
+                        code: '',
+                        description: '',
+                        options: '',
+                        answer: '',
+                        explanation: '',
+                        difficulty: '',
+                        isActive: true,
+                      });
+                    }}
+                    className="px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500"
+                  >
+                    取消編輯
+                  </button>
+                )}
                 <button
                   onClick={() =>
                     setExamForm({
