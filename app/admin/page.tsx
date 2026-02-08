@@ -2409,6 +2409,15 @@ function AdminPageContent() {
                   <div className="mb-3 text-xs text-gray-600">
                     欄位：code,description,answer,year,options,explanation,difficulty,is_active
                   </div>
+                  <div className="mb-3 text-xs text-gray-600">
+                    範例（會依目前 Tab 科目匯入）：
+                  </div>
+                  <pre className="mb-3 rounded border border-gray-200 bg-white p-3 text-xs text-gray-700 overflow-x-auto">
+{`code,description,answer,year,options,explanation,difficulty,is_active
+M-2022-01,"已知直角三角形兩邊 3,4，求斜邊長","5",2022,"[""3"",""4"",""5"",""6""]","依畢氏定理，斜邊=5",easy,true
+M-2022-02,"解二元一次聯立方程式：x+y=7, x-y=1","x=4, y=3",2022,,相加消去 y,easy,true
+P-2021-05,"下列何者屬於氧化反應？","鐵生鏽",2021,"[""鐵生鏽"",""冰融化"",""鹽溶於水"",""水蒸發""]","氧化為與氧反應",easy,true`}
+                  </pre>
                   <textarea
                     value={examImportText}
                     onChange={(e) => setExamImportText(e.target.value)}
