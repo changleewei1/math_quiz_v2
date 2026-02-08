@@ -130,10 +130,12 @@ export async function middleware(request: NextRequest) {
   // 保護學生頁面與 API
   const isStudentPage =
     path.startsWith('/practice') ||
-    path.startsWith('/diagnostic');
+    path.startsWith('/diagnostic') ||
+    path.startsWith('/mock-exam');
   const isStudentApi =
     path.startsWith('/api/practice') ||
     path.startsWith('/api/diagnostic') ||
+    path.startsWith('/api/mock-exam') ||
     path.startsWith('/api/student');
 
   if (isStudentPage || isStudentApi) {
@@ -179,8 +181,10 @@ export const config = {
     '/api/teacher/:path*',
     '/practice/:path*',
     '/diagnostic/:path*',
+    '/mock-exam/:path*',
     '/api/practice/:path*',
     '/api/diagnostic/:path*',
+    '/api/mock-exam/:path*',
     '/api/student/:path*',
   ],
 };

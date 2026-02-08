@@ -6,14 +6,24 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const subject = searchParams.get('subject') || 'math';
+    const year = searchParams.get('year');
 
     const supabase = supabaseServer();
-    const { data, error } = await supabase
+    let query = supabase
       .from('exam_questions')
       .select('*')
       .eq('subject', subject)
+      .order('exam_year', { ascending: false })
+      .order('question_no', { ascending: true })
+      .order('order_index', { ascending: true })
       .order('created_at', { ascending: false })
-      .limit(200);
+      .limit(500);
+
+    if (year) {
+      query = query.eq('exam_year', Number(year));
+    }
+
+    const { data, error } = await query;
 
     if (error) throw error;
 
@@ -29,7 +39,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { subject, records } = body || {};
+    const { subject, records, exam_year } = body || {};
 
     const supabase = supabaseServer();
 
@@ -47,16 +57,21 @@ export async function POST(request: NextRequest) {
           errors.push(`第 ${index + 1} 筆：缺少 code / description / answer`);
           return;
         }
+        const resolvedYear = row.exam_year ?? row.year ?? exam_year;
         payloads.push({
           id: `eq_${nanoid(12)}`,
           subject,
-          year: row.year ? Number(row.year) : null,
+          source: row.source || 'CAP',
+          exam_year: resolvedYear ? Number(resolvedYear) : null,
+          year: resolvedYear ? Number(resolvedYear) : null,
           code: String(row.code).trim(),
           description: String(row.description).trim(),
           options: row.options ?? null,
           answer: row.answer,
           explanation: row.explanation || null,
           difficulty: row.difficulty || null,
+          question_no: row.question_no ? Number(row.question_no) : null,
+          order_index: row.order_index ? Number(row.order_index) : null,
           is_active: typeof row.is_active === 'boolean' ? row.is_active : true,
         });
       });
@@ -96,13 +111,17 @@ export async function POST(request: NextRequest) {
     const payload = {
       id: `eq_${nanoid(12)}`,
       subject,
-      year: year ? Number(year) : null,
+      source: body?.source || 'CAP',
+      exam_year: body?.exam_year ? Number(body.exam_year) : year ? Number(year) : null,
+      year: year ? Number(year) : body?.exam_year ? Number(body.exam_year) : null,
       code,
       description,
       options: options ?? null,
       answer,
       explanation: explanation || null,
       difficulty: difficulty || null,
+      question_no: body?.question_no ? Number(body.question_no) : null,
+      order_index: body?.order_index ? Number(body.order_index) : null,
       is_active: typeof is_active === 'boolean' ? is_active : true,
     };
 
@@ -130,6 +149,10 @@ export async function PATCH(request: NextRequest) {
       id,
       subject,
       year,
+      exam_year,
+      source,
+      question_no,
+      order_index,
       code,
       description,
       options,
@@ -148,8 +171,13 @@ export async function PATCH(request: NextRequest) {
 
     const supabase = supabaseServer();
 
+    const resolvedYear = exam_year ?? year;
     const payload = {
-      year: year ? Number(year) : null,
+      source: source || 'CAP',
+      exam_year: resolvedYear ? Number(resolvedYear) : null,
+      year: resolvedYear ? Number(resolvedYear) : null,
+      question_no: question_no ? Number(question_no) : null,
+      order_index: order_index ? Number(order_index) : null,
       code,
       description,
       options: options ?? null,
