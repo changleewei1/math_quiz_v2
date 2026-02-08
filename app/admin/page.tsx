@@ -2438,7 +2438,7 @@ function AdminPageContent() {
                   disabled={examLoading}
                   className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
                 >
-                  {examLoading ? '處理中...' : '新增/更新題目'}
+                  {examLoading ? '處理中...' : '插入/更新題目'}
                 </button>
                 <button
                   onClick={() =>
@@ -2617,7 +2617,7 @@ P-2021-05,"下列何者屬於氧化反應？","鐵生鏽",2021,"[""鐵生鏽"","
                                 onClick={() => handleEditExamQuestion(q)}
                                 className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
                               >
-                                插入
+                                編輯
                               </button>
                               <button
                                 onClick={() => handleDeleteExamQuestion(q.id)}
