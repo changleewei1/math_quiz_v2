@@ -14,27 +14,17 @@ export default function ExamDiagnosticHome() {
               會考弱點分析
             </h2>
             <p className="text-center text-sm sm:text-base text-gray-600 mb-6 sm:mb-8">
-              請選擇科目進入歷屆會考測試
+              先選年份再開始測驗（已改為年份優先流程）
             </p>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+            <div className="space-y-4">
               <Link
-                href="/exam-diagnostic/math"
-                className="block p-6 min-h-[96px] bg-blue-500 hover:bg-blue-600 text-white rounded-lg shadow-md transition-colors text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
+                href="/mock-exam"
+                className="block p-6 min-h-[96px] bg-orange-500 hover:bg-orange-600 text-white rounded-lg shadow-md transition-colors text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300"
               >
-                <h3 className="text-2xl font-semibold mb-2">數學會考弱點分析</h3>
-                <p className="text-blue-100">
-                  針對 1～6 冊題型進行診斷
-                </p>
-              </Link>
-
-              <Link
-                href="/exam-diagnostic/physics"
-                className="block p-6 min-h-[96px] bg-green-500 hover:bg-green-600 text-white rounded-lg shadow-md transition-colors text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-300"
-              >
-                <h3 className="text-2xl font-semibold mb-2">理化會考弱點分析</h3>
-                <p className="text-green-100">
-                  針對 3～6 冊題型進行診斷
+                <h3 className="text-2xl font-semibold mb-2">開始選擇年份</h3>
+                <p className="text-orange-100">
+                  科目 → 年份 → 測驗
                 </p>
               </Link>
             </div>
