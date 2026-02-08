@@ -1197,6 +1197,8 @@ function AdminPageContent() {
   const [examQuestions, setExamQuestions] = useState<any[]>([]);
   const [examLoading, setExamLoading] = useState(false);
   const [examError, setExamError] = useState('');
+  const [examDeleteLoading, setExamDeleteLoading] = useState(false);
+  const [selectedExamIds, setSelectedExamIds] = useState<Set<string>>(new Set());
   const [examForm, setExamForm] = useState({
     year: '',
     code: '',
@@ -1699,6 +1701,7 @@ function AdminPageContent() {
       const data = await res.json();
       if (res.ok && data.data) {
         setExamQuestions(data.data);
+        setSelectedExamIds(new Set());
       } else {
         setExamError(data.error || '載入題庫失敗');
       }
@@ -1777,6 +1780,72 @@ function AdminPageContent() {
       setExamError(err.message || '新增失敗');
     } finally {
       setExamLoading(false);
+    }
+  };
+
+  const handleEditExamQuestion = (q: any) => {
+    setExamForm({
+      year: q.year ? String(q.year) : '',
+      code: q.code || '',
+      description: q.description || '',
+      options: Array.isArray(q.options) || typeof q.options === 'object' ? JSON.stringify(q.options) : '',
+      answer:
+        Array.isArray(q.answer) || typeof q.answer === 'object'
+          ? JSON.stringify(q.answer)
+          : String(q.answer ?? ''),
+      explanation: q.explanation || '',
+      difficulty: q.difficulty || '',
+      isActive: typeof q.is_active === 'boolean' ? q.is_active : true,
+    });
+  };
+
+  const handleDeleteExamQuestion = async (id: string) => {
+    if (!confirm('確定要移除此題目？此操作無法復原。')) return;
+    setExamDeleteLoading(true);
+    setExamError('');
+    try {
+      const res = await fetch('/api/admin/exam-questions', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setExamError(data.error || '移除失敗');
+        return;
+      }
+      await loadExamQuestions();
+    } catch (err: any) {
+      setExamError(err.message || '移除失敗');
+    } finally {
+      setExamDeleteLoading(false);
+    }
+  };
+
+  const handleBatchDeleteExamQuestions = async () => {
+    if (selectedExamIds.size === 0) {
+      alert('請至少選擇一題要移除');
+      return;
+    }
+    if (!confirm(`確定要批次移除 ${selectedExamIds.size} 題？此操作無法復原。`)) return;
+    setExamDeleteLoading(true);
+    setExamError('');
+    try {
+      const res = await fetch('/api/admin/exam-questions', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: Array.from(selectedExamIds), subject: examSubjectTab }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setExamError(data.error || '批次移除失敗');
+        return;
+      }
+      await loadExamQuestions();
+    } catch (err: any) {
+      setExamError(err.message || '批次移除失敗');
+    } finally {
+      setExamDeleteLoading(false);
     }
   };
 
@@ -2475,7 +2544,16 @@ P-2021-05,"下列何者屬於氧化反應？","鐵生鏽",2021,"[""鐵生鏽"","
             </div>
 
             <div>
-              <h3 className="font-semibold mb-3">題庫列表</h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold">題庫列表</h3>
+                <button
+                  onClick={handleBatchDeleteExamQuestions}
+                  disabled={examDeleteLoading || selectedExamIds.size === 0}
+                  className="px-3 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
+                >
+                  {examDeleteLoading ? '移除中...' : `批次移除${selectedExamIds.size ? ` (${selectedExamIds.size})` : ''}`}
+                </button>
+              </div>
               {examLoading ? (
                 <p className="text-sm text-gray-500">載入中...</p>
               ) : (
@@ -2483,15 +2561,46 @@ P-2021-05,"下列何者屬於氧化反應？","鐵生鏽",2021,"[""鐵生鏽"","
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b">
+                        <th className="text-center p-2">
+                          <input
+                            type="checkbox"
+                            checked={examQuestions.length > 0 && selectedExamIds.size === examQuestions.length}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedExamIds(new Set(examQuestions.map((q) => q.id)));
+                              } else {
+                                setSelectedExamIds(new Set());
+                              }
+                            }}
+                          />
+                        </th>
                         <th className="text-left p-2">代碼</th>
                         <th className="text-left p-2">題目</th>
                         <th className="text-center p-2">年度</th>
                         <th className="text-center p-2">狀態</th>
+                        <th className="text-center p-2">操作</th>
                       </tr>
                     </thead>
                     <tbody>
                       {examQuestions.map((q) => (
                         <tr key={q.id} className="border-b hover:bg-gray-50">
+                          <td className="p-2 text-center">
+                            <input
+                              type="checkbox"
+                              checked={selectedExamIds.has(q.id)}
+                              onChange={() => {
+                                setSelectedExamIds((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(q.id)) {
+                                    next.delete(q.id);
+                                  } else {
+                                    next.add(q.id);
+                                  }
+                                  return next;
+                                });
+                              }}
+                            />
+                          </td>
                           <td className="p-2 font-medium">{q.code}</td>
                           <td className="p-2 text-xs text-gray-700">{q.description}</td>
                           <td className="p-2 text-center text-xs text-gray-600">{q.year || '-'}</td>
@@ -2501,6 +2610,23 @@ P-2021-05,"下列何者屬於氧化反應？","鐵生鏽",2021,"[""鐵生鏽"","
                             }`}>
                               {q.is_active ? '啟用' : '停用'}
                             </span>
+                          </td>
+                          <td className="p-2 text-center">
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                onClick={() => handleEditExamQuestion(q)}
+                                className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                              >
+                                插入
+                              </button>
+                              <button
+                                onClick={() => handleDeleteExamQuestion(q.id)}
+                                disabled={examDeleteLoading}
+                                className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 disabled:opacity-50"
+                              >
+                                移除
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}

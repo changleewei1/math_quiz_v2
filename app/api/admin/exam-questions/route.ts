@@ -123,4 +123,42 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export async function DELETE(request: NextRequest) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const { id, ids, subject } = body || {};
+
+    const supabase = supabaseServer();
+
+    if (Array.isArray(ids) && ids.length > 0) {
+      const { error } = await supabase
+        .from('exam_questions')
+        .delete()
+        .in('id', ids)
+        .eq('subject', subject || 'math');
+
+      if (error) throw error;
+      return NextResponse.json({ deletedCount: ids.length });
+    }
+
+    if (!id) {
+      return NextResponse.json({ error: '缺少 id' }, { status: 400 });
+    }
+
+    const { error } = await supabase
+      .from('exam_questions')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+
+    return NextResponse.json({ deletedCount: 1 });
+  } catch (error: any) {
+    return NextResponse.json(
+      { error: error.message || '刪除失敗' },
+      { status: 500 }
+    );
+  }
+}
+
 
