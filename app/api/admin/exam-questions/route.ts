@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { subject, records, exam_year } = body || {};
+    const { subject, records, exam_year: examYearFromBody } = body || {};
 
     const supabase = supabaseServer();
 
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
           errors.push(`第 ${index + 1} 筆：缺少 code / description / answer`);
           return;
         }
-        const resolvedYear = row.exam_year ?? row.year ?? exam_year;
+        const resolvedYear = row.exam_year ?? row.year ?? examYearFromBody;
         payloads.push({
           id: `eq_${nanoid(12)}`,
           subject,
