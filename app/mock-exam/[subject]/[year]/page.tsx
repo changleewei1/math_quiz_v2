@@ -140,9 +140,24 @@ export default function MockExamSessionPage() {
                       第 {q.question_no ?? index + 1} 題
                     </div>
                     <p className="text-gray-800 mb-3">{q.description}</p>
-                    {q.options && q.options.length > 0 ? (
-                      <div className="space-y-2">
-                        {q.options.map((opt, idx) => (
+                    {(() => {
+                      const rawOptions = q.options;
+                      let options: string[] = [];
+                      if (Array.isArray(rawOptions)) {
+                        options = rawOptions.map((opt) => String(opt));
+                      } else if (typeof rawOptions === 'string') {
+                        try {
+                          const parsed = JSON.parse(rawOptions);
+                          if (Array.isArray(parsed)) {
+                            options = parsed.map((opt) => String(opt));
+                          }
+                        } catch {
+                          options = [];
+                        }
+                      }
+                      return options.length > 0 ? (
+                        <div className="space-y-2">
+                          {options.map((opt, idx) => (
                           <label key={idx} className="flex items-center gap-2 text-sm">
                             <input
                               type="radio"
@@ -161,9 +176,9 @@ export default function MockExamSessionPage() {
                             />
                             <span>{opt}</span>
                           </label>
-                        ))}
-                      </div>
-                    ) : (
+                          ))}
+                        </div>
+                      ) : (
                       <input
                         type="text"
                         value={answers[q.id] || ''}
@@ -181,7 +196,8 @@ export default function MockExamSessionPage() {
                         className="w-full p-2 bg-white text-gray-900 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="請輸入答案"
                       />
-                    )}
+                      );
+                    })()}
                     {feedbackMap[q.id] && (
                       <div className="mt-3 text-sm font-semibold">
                         <span className={feedbackMap[q.id] === 'correct' ? 'text-green-600' : 'text-red-600'}>
