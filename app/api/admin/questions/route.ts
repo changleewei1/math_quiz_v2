@@ -30,7 +30,8 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
-      query = query.ilike('prompt', `%${search}%`);
+      const escaped = search.replace(/%/g, '\\%').replace(/_/g, '\\_');
+      query = query.or(`prompt.ilike.%${escaped}%,prompt_md.ilike.%${escaped}%`);
     }
 
     const { data, error } = await query;
@@ -55,6 +56,7 @@ export async function POST(request: NextRequest) {
         difficulty,
         qtype,
         prompt,
+        prompt_md,
         answer,
         choices,
         correct_choice_index,
@@ -62,10 +64,12 @@ export async function POST(request: NextRequest) {
         tags,
         video_url,
         explain,
+        explain_md,
         created_at,
       } = body;
 
-    if (!chapter_id || !type_id || !difficulty || !qtype || !prompt || !answer) {
+    const resolvedPrompt = prompt_md || prompt;
+    if (!chapter_id || !type_id || !difficulty || !qtype || !resolvedPrompt || !answer) {
       return NextResponse.json(
         { error: '缺少必要欄位' },
         { status: 400 }
@@ -78,7 +82,8 @@ export async function POST(request: NextRequest) {
       type_id,
       difficulty,
       qtype,
-      prompt,
+      prompt: resolvedPrompt,
+      prompt_md: prompt_md || null,
       answer,
       choices: choices || null,
       correct_choice_index: correct_choice_index || null,
@@ -86,6 +91,7 @@ export async function POST(request: NextRequest) {
       tags: tags || null,
       video_url: video_url || null,
       explain: explain || null,
+      explain_md: explain_md || null,
       is_active: true,
     };
 

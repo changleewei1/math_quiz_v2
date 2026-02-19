@@ -1,5 +1,7 @@
 'use client';
 
+import ReactMarkdown from 'react-markdown';
+import remarkBreaks from 'remark-breaks';
 import type { MediaBlock } from '@/types/media';
 import { isImageMedia, isTableMedia, isChartMedia, parseMedia, isValidMediaBlock } from '@/types/media';
 import MediaImage from './MediaImage';
@@ -34,21 +36,27 @@ export default function QuestionRenderer({
     return [];
   })();
 
-  // 處理 prompt 換行（支援 \n）
-  const formattedPrompt = prompt.split('\n').map((line, index) => (
-    <span key={index}>
-      {line}
-      {index < prompt.split('\n').length - 1 && <br />}
-    </span>
-  ));
-
   return (
     <div className={className}>
       {/* 題幹文字 */}
       <div className="mb-4">
-        <p className="text-lg leading-relaxed whitespace-pre-wrap">
-          {formattedPrompt}
-        </p>
+        <div className="text-lg leading-relaxed">
+          <ReactMarkdown
+            remarkPlugins={[remarkBreaks]}
+            components={{
+              img: ({ ...props }) => (
+                <img
+                  {...props}
+                  alt={props.alt || 'image'}
+                  className="max-w-full h-auto my-3 rounded border border-gray-200"
+                />
+              ),
+              p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
+            }}
+          >
+            {prompt || ''}
+          </ReactMarkdown>
+        </div>
       </div>
 
       {/* 媒體資源（圖片、表格、圖表等） */}

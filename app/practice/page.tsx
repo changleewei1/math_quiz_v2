@@ -1071,7 +1071,11 @@ function PracticePageContent() {
               本題計時：{formatTime(elapsedMs)}
             </span>
           </div>
-          <QuestionRenderer prompt={currentQuestion.prompt} media={currentQuestion.media} className="mb-6" />
+          <QuestionRenderer
+            prompt={currentQuestion.prompt_md || currentQuestion.prompt}
+            media={currentQuestion.media}
+            className="mb-6"
+          />
           {feedback && (
             <div
               className={`mb-4 rounded px-4 py-2 text-sm font-semibold ${

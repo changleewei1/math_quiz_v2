@@ -27,12 +27,15 @@ export async function POST(request: NextRequest) {
     }
 
     // 批次插入
-    const questionsToInsert = questions.map((q: any) => ({
+    const questionsToInsert = questions.map((q: any) => {
+      const resolvedPrompt = q.prompt_md || q.prompt;
+      return {
       chapter_id: chapterId,
       type_id: typeId,
       difficulty: q.difficulty,
       qtype: q.qtype,
-      prompt: q.prompt,
+      prompt: resolvedPrompt,
+      prompt_md: q.prompt_md || null,
       answer: q.answer,
       choices: q.choices || null,
       correct_choice_index: q.correct_choice_index ?? null,
@@ -40,8 +43,10 @@ export async function POST(request: NextRequest) {
       tags: q.tags || null,
       video_url: q.video_url || null,
       explain: q.explain || null,
+      explain_md: q.explain_md || null,
       is_active: true,
-    }));
+    };
+    });
 
     const { data, error } = await supabase
       .from('questions')

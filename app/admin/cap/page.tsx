@@ -1,7 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import ReactMarkdown from 'react-markdown';
+import remarkBreaks from 'remark-breaks';
 
 type ExamQuestion = {
   id: string;
@@ -37,6 +39,13 @@ export default function AdminCapPage() {
     orderIndex: '',
     isActive: true,
   });
+  const [showPromptPreview, setShowPromptPreview] = useState(false);
+  const [showExplainPreview, setShowExplainPreview] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const promptRef = useRef<HTMLTextAreaElement | null>(null);
+  const explainRef = useRef<HTMLTextAreaElement | null>(null);
+  const promptFileRef = useRef<HTMLInputElement | null>(null);
+  const explainFileRef = useRef<HTMLInputElement | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [importText, setImportText] = useState('');
@@ -110,6 +119,8 @@ export default function AdminCapPage() {
       orderIndex: '',
       isActive: true,
     });
+    setShowPromptPreview(false);
+    setShowExplainPreview(false);
   };
 
   const handleSave = async () => {
@@ -148,9 +159,11 @@ export default function AdminCapPage() {
       year: selectedYear,
       code: form.code.trim(),
       description: form.description.trim(),
+      description_md: form.description.trim() || null,
       options: optionsValue,
       answer: answerValue,
       explanation: form.explanation.trim() || null,
+      explanation_md: form.explanation.trim() || null,
       difficulty: form.difficulty.trim() || null,
       question_no: form.questionNo ? Number(form.questionNo) : null,
       order_index: form.orderIndex ? Number(form.orderIndex) : null,
@@ -175,36 +188,90 @@ export default function AdminCapPage() {
     setEditingId(q.id);
     setForm({
       code: q.code || '',
-      description: q.description || '',
+      description: q.description_md || q.description || '',
       options: Array.isArray(q.options) || typeof q.options === 'object' ? JSON.stringify(q.options) : '',
       answer:
         Array.isArray(q.answer) || typeof q.answer === 'object'
           ? JSON.stringify(q.answer)
           : String(q.answer ?? ''),
-      explanation: q.explanation || '',
+      explanation: q.explanation_md || q.explanation || '',
       difficulty: q.difficulty || '',
       questionNo: q.question_no ? String(q.question_no) : '',
       orderIndex: q.order_index ? String(q.order_index) : '',
       isActive: q.is_active ?? true,
     });
+    setShowPromptPreview(false);
+    setShowExplainPreview(false);
   };
 
   const handleInsert = (q: ExamQuestion) => {
     setEditingId(null);
     setForm({
       code: '',
-      description: q.description || '',
+      description: q.description_md || q.description || '',
       options: Array.isArray(q.options) || typeof q.options === 'object' ? JSON.stringify(q.options) : '',
       answer:
         Array.isArray(q.answer) || typeof q.answer === 'object'
           ? JSON.stringify(q.answer)
           : String(q.answer ?? ''),
-      explanation: q.explanation || '',
+      explanation: q.explanation_md || q.explanation || '',
       difficulty: q.difficulty || '',
       questionNo: q.question_no ? String(q.question_no) : '',
       orderIndex: q.order_index ? String(q.order_index) : '',
       isActive: q.is_active ?? true,
     });
+    setShowPromptPreview(false);
+    setShowExplainPreview(false);
+  };
+
+  const insertAtCursor = (ref: React.RefObject<HTMLTextAreaElement>, value: string, field: 'description' | 'explanation') => {
+    const target = ref.current;
+    if (!target) {
+      setForm((prev) => ({ ...prev, [field]: `${prev[field] || ''}\n${value}` }));
+      return;
+    }
+    const start = target.selectionStart ?? target.value.length;
+    const end = target.selectionEnd ?? target.value.length;
+    const nextValue = `${target.value.slice(0, start)}${value}${target.value.slice(end)}`;
+    setForm((prev) => ({ ...prev, [field]: nextValue }));
+    requestAnimationFrame(() => {
+      target.focus();
+      const cursor = start + value.length;
+      target.setSelectionRange(cursor, cursor);
+    });
+  };
+
+  const uploadImage = async (file: File, field: 'description' | 'explanation') => {
+    if (!selectedYear) {
+      setError('請先選擇年份');
+      return;
+    }
+    setUploadingImage(true);
+    setError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('subject', subject);
+      formData.append('exam_year', String(selectedYear));
+      formData.append('question_no', form.questionNo || 'unknown');
+      const res = await fetch('/api/admin/upload-image', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || '上傳失敗');
+        return;
+      }
+      const markdown = `![image](${data.url})`;
+      insertAtCursor(field === 'description' ? promptRef : explainRef, markdown, field);
+    } catch (err: any) {
+      setError(err.message || '上傳失敗');
+    } finally {
+      setUploadingImage(false);
+      if (field === 'description' && promptFileRef.current) promptFileRef.current.value = '';
+      if (field === 'explanation' && explainFileRef.current) explainFileRef.current.value = '';
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -364,12 +431,63 @@ export default function AdminCapPage() {
               />
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium mb-1">題目 *</label>
-              <textarea
-                value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-                className="w-full p-2 border rounded"
-                rows={3}
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium">題目（Markdown）*</label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowPromptPreview((prev) => !prev)}
+                    className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded"
+                  >
+                    {showPromptPreview ? '編輯' : '預覽'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => promptFileRef.current?.click()}
+                    disabled={uploadingImage}
+                    className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded disabled:opacity-50"
+                  >
+                    {uploadingImage ? '上傳中...' : '上傳圖片'}
+                  </button>
+                </div>
+              </div>
+              {!showPromptPreview ? (
+                <textarea
+                  ref={promptRef}
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  className="w-full p-2 border rounded font-mono text-sm"
+                  rows={6}
+                  placeholder="支援 Markdown，例如：![image](url)"
+                />
+              ) : (
+                <div className="w-full p-3 border rounded bg-gray-50">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkBreaks]}
+                    components={{
+                      img: ({ ...props }) => (
+                        <img
+                          {...props}
+                          alt={props.alt || 'image'}
+                          className="max-w-full h-auto my-3 rounded border border-gray-200"
+                        />
+                      ),
+                      p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
+                    }}
+                  >
+                    {form.description || ''}
+                  </ReactMarkdown>
+                </div>
+              )}
+              <input
+                ref={promptFileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) uploadImage(file, 'description');
+                }}
               />
             </div>
             <div className="md:col-span-2">
@@ -391,12 +509,63 @@ export default function AdminCapPage() {
               />
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium mb-1">解析</label>
-              <textarea
-                value={form.explanation}
-                onChange={(e) => setForm({ ...form, explanation: e.target.value })}
-                className="w-full p-2 border rounded"
-                rows={2}
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium">解析（Markdown）</label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowExplainPreview((prev) => !prev)}
+                    className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded"
+                  >
+                    {showExplainPreview ? '編輯' : '預覽'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => explainFileRef.current?.click()}
+                    disabled={uploadingImage}
+                    className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded disabled:opacity-50"
+                  >
+                    {uploadingImage ? '上傳中...' : '上傳圖片'}
+                  </button>
+                </div>
+              </div>
+              {!showExplainPreview ? (
+                <textarea
+                  ref={explainRef}
+                  value={form.explanation}
+                  onChange={(e) => setForm({ ...form, explanation: e.target.value })}
+                  className="w-full p-2 border rounded font-mono text-sm"
+                  rows={4}
+                  placeholder="支援 Markdown，例如：![image](url)"
+                />
+              ) : (
+                <div className="w-full p-3 border rounded bg-gray-50">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkBreaks]}
+                    components={{
+                      img: ({ ...props }) => (
+                        <img
+                          {...props}
+                          alt={props.alt || 'image'}
+                          className="max-w-full h-auto my-3 rounded border border-gray-200"
+                        />
+                      ),
+                      p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
+                    }}
+                  >
+                    {form.explanation || ''}
+                  </ReactMarkdown>
+                </div>
+              )}
+              <input
+                ref={explainFileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) uploadImage(file, 'explanation');
+                }}
               />
             </div>
             <div>

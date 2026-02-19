@@ -226,7 +226,7 @@ export default function DiagnosticSessionPage() {
                   第 {index + 1} 題 | {q.difficulty}
                 </span>
               </div>
-              <QuestionRenderer prompt={q.prompt} media={q.media} />
+              <QuestionRenderer prompt={q.prompt_md || q.prompt} media={q.media} />
 
               {q.qtype === 'mcq' && q.choices ? (
                 <div className="space-y-2">

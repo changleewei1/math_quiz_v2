@@ -5,14 +5,18 @@ import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import BrandHeader from '@/components/BrandHeader';
 import { isAnswerMatch } from '@/lib/answerMatch';
+import ReactMarkdown from 'react-markdown';
+import remarkBreaks from 'remark-breaks';
 
 type ExamQuestion = {
   id: string;
   code: string;
   description: string;
+  description_md?: string | null;
   options: string[] | null;
   answer: any;
   explanation?: string | null;
+  explanation_md?: string | null;
   question_no?: number | null;
   order_index?: number | null;
 };
@@ -104,6 +108,24 @@ export default function MockExamSessionPage() {
     return String(value ?? '');
   };
 
+  const renderMarkdown = (content: string) => (
+    <ReactMarkdown
+      remarkPlugins={[remarkBreaks]}
+      components={{
+        img: ({ ...props }) => (
+          <img
+            {...props}
+            alt={props.alt || 'image'}
+            className="max-w-full h-auto my-3 rounded border border-gray-200"
+          />
+        ),
+        p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  );
+
   const handleSubmit = () => {
     if (questions.length === 0) return;
     setSubmitted(true);
@@ -139,7 +161,9 @@ export default function MockExamSessionPage() {
                     <div className="text-sm text-gray-500 mb-2">
                       第 {q.question_no ?? index + 1} 題
                     </div>
-                    <p className="text-gray-800 mb-3">{q.description}</p>
+                    <div className="text-gray-800 mb-3">
+                      {renderMarkdown(q.description_md || q.description || '')}
+                    </div>
                     {(() => {
                       const rawOptions = q.options;
                       let options: string[] = [];
@@ -231,7 +255,9 @@ export default function MockExamSessionPage() {
                     {wrongQuestions.map((q, index) => (
                       <div key={q.id} className="border rounded p-4">
                         <div className="text-sm text-gray-500 mb-2">第 {index + 1} 題</div>
-                        <p className="text-gray-800 mb-3">{q.description}</p>
+                        <div className="text-gray-800 mb-3">
+                          {renderMarkdown(q.description_md || q.description || '')}
+                        </div>
                         {q.options && q.options.length > 0 && (
                           <div className="text-sm text-gray-600 mb-2">
                             選項：{q.options.join(' / ')}
@@ -243,9 +269,10 @@ export default function MockExamSessionPage() {
                         <div className="text-sm text-green-700">
                           正確答案：{formatAnswer(q.answer)}
                         </div>
-                        {q.explanation && (
+                        {(q.explanation_md || q.explanation) && (
                           <div className="text-sm text-gray-600 mt-2">
-                            解析：{q.explanation}
+                            <span className="font-medium">解析：</span>
+                            {renderMarkdown(q.explanation_md || q.explanation || '')}
                           </div>
                         )}
                       </div>

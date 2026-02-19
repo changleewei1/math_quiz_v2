@@ -37,6 +37,7 @@ export interface Question {
   difficulty: Difficulty;
   qtype: QuestionType;
   prompt: string;
+  prompt_md?: string | null;
   answer: string;
   choices: string[] | null;
   correct_choice_index: number | null;
@@ -44,6 +45,7 @@ export interface Question {
   tags: string[] | null;
   video_url: string | null;
   explain: string | null;
+  explain_md?: string | null;
   media: MediaBlock | null; // 題目媒體資源（圖片、圖表等）
   is_active: boolean;
   created_at: string;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import type { Chapter, QuestionTypeData, Question } from '@/types';
@@ -45,6 +45,9 @@ function AdminPageContent() {
   const [batchInputText, setBatchInputText] = useState('');
   const [batchInputLoading, setBatchInputLoading] = useState(false);
   const [batchInputResult, setBatchInputResult] = useState<{success: number, failed: number, errors?: string[]} | null>(null);
+  const [batchImageUploading, setBatchImageUploading] = useState(false);
+  const batchInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const batchImageInputRef = useRef<HTMLInputElement | null>(null);
   
   // 批次刪除狀態
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<Set<string>>(new Set());
@@ -909,6 +912,53 @@ function AdminPageContent() {
     }
   };
 
+  const insertBatchAtCursor = (value: string) => {
+    const target = batchInputRef.current;
+    if (!target) {
+      setBatchInputText((prev) => `${prev}\n${value}`);
+      return;
+    }
+    const start = target.selectionStart ?? target.value.length;
+    const end = target.selectionEnd ?? target.value.length;
+    const nextValue = `${target.value.slice(0, start)}${value}${target.value.slice(end)}`;
+    setBatchInputText(nextValue);
+    requestAnimationFrame(() => {
+      target.focus();
+      const cursor = start + value.length;
+      target.setSelectionRange(cursor, cursor);
+    });
+  };
+
+  const handleBatchImageUpload = async (file: File) => {
+    if (!selectedChapter || !selectedType) {
+      setError('請先選擇章節和題型');
+      return;
+    }
+    setBatchImageUploading(true);
+    setError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('chapterId', selectedChapter);
+      formData.append('typeId', selectedType);
+      const res = await fetch('/api/admin/upload-image/batch', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || '上傳失敗');
+        return;
+      }
+      insertBatchAtCursor(`![image](${data.url})`);
+    } catch (err: any) {
+      setError(err.message || '上傳失敗');
+    } finally {
+      setBatchImageUploading(false);
+      if (batchImageInputRef.current) batchImageInputRef.current.value = '';
+    }
+  };
+
   const handleBatchInput = async () => {
     if (!selectedChapter || !selectedType) {
       setError('請先選擇章節和題型');
@@ -951,7 +1001,10 @@ function AdminPageContent() {
         if (!q.qtype || !['input', 'mcq', 'word'].includes(q.qtype)) {
           errors.push(`題目 ${index + 1}: 缺少或無效的 qtype（必須是 input, mcq 或 word）`);
         }
-        if (!q.prompt || typeof q.prompt !== 'string') {
+        if (
+          (!q.prompt || typeof q.prompt !== 'string') &&
+          (!q.prompt_md || typeof q.prompt_md !== 'string')
+        ) {
           errors.push(`題目 ${index + 1}: 缺少或無效的 prompt（必須是字串）`);
         }
         if (!q.answer || typeof q.answer !== 'string') {
@@ -1210,6 +1263,11 @@ function AdminPageContent() {
     difficulty: '',
     isActive: true,
   });
+  const [examImageUploading, setExamImageUploading] = useState(false);
+  const examDescriptionRef = useRef<HTMLTextAreaElement | null>(null);
+  const examExplanationRef = useRef<HTMLTextAreaElement | null>(null);
+  const examDescriptionFileRef = useRef<HTMLInputElement | null>(null);
+  const examExplanationFileRef = useRef<HTMLInputElement | null>(null);
   const [showExamImport, setShowExamImport] = useState(false);
   const [examImportText, setExamImportText] = useState('');
   const [examImportLoading, setExamImportLoading] = useState(false);
@@ -1791,6 +1849,56 @@ function AdminPageContent() {
     }
   };
 
+  const insertExamAtCursor = (
+    ref: React.RefObject<HTMLTextAreaElement>,
+    value: string,
+    field: 'description' | 'explanation'
+  ) => {
+    const target = ref.current;
+    if (!target) {
+      setExamForm((prev) => ({ ...prev, [field]: `${prev[field] || ''}\n${value}` }));
+      return;
+    }
+    const start = target.selectionStart ?? target.value.length;
+    const end = target.selectionEnd ?? target.value.length;
+    const nextValue = `${target.value.slice(0, start)}${value}${target.value.slice(end)}`;
+    setExamForm((prev) => ({ ...prev, [field]: nextValue }));
+    requestAnimationFrame(() => {
+      target.focus();
+      const cursor = start + value.length;
+      target.setSelectionRange(cursor, cursor);
+    });
+  };
+
+  const handleExamImageUpload = async (file: File, field: 'description' | 'explanation') => {
+    setExamImageUploading(true);
+    setExamError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('subject', examSubjectTab);
+      formData.append('exam_year', examForm.year || 'unknown');
+      formData.append('question_no', examForm.code || 'unknown');
+
+      const res = await fetch('/api/admin/upload-image', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setExamError(data.error || '上傳失敗');
+        return;
+      }
+      insertExamAtCursor(field === 'description' ? examDescriptionRef : examExplanationRef, `![image](${data.url})`, field);
+    } catch (err: any) {
+      setExamError(err.message || '上傳失敗');
+    } finally {
+      setExamImageUploading(false);
+      if (field === 'description' && examDescriptionFileRef.current) examDescriptionFileRef.current.value = '';
+      if (field === 'explanation' && examExplanationFileRef.current) examExplanationFileRef.current.value = '';
+    }
+  };
+
   const handleEditExamQuestion = (q: any) => {
     setEditingExamId(q.id);
     setExamForm({
@@ -2343,7 +2451,15 @@ function AdminPageContent() {
         {/* 會考弱點分析題庫 */}
         {showExamQuestions && (
           <div className="mb-6 bg-white p-6 rounded-lg shadow-lg">
-            <h2 className="text-2xl font-bold mb-4">會考弱點分析題庫</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-bold">會考弱點分析題庫</h2>
+              <Link
+                href="/admin/cap"
+                className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+              >
+                年份分層管理
+              </Link>
+            </div>
 
             <div className="flex space-x-2 mb-4">
               <button
@@ -2400,13 +2516,34 @@ function AdminPageContent() {
                   />
                 </div>
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">題目內容（必填）</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-sm font-medium text-gray-700">題目內容（必填）</label>
+                    <button
+                      type="button"
+                      onClick={() => examDescriptionFileRef.current?.click()}
+                      disabled={examImageUploading}
+                      className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded disabled:opacity-50"
+                    >
+                      {examImageUploading ? '上傳中...' : '上傳圖片'}
+                    </button>
+                  </div>
                   <textarea
+                    ref={examDescriptionRef}
                     value={examForm.description}
                     onChange={(e) => setExamForm({ ...examForm, description: e.target.value })}
                     className="w-full p-2 bg-white text-gray-900 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                     rows={3}
-                    placeholder="請輸入題目描述"
+                    placeholder="支援 Markdown 圖片語法 ![image](url)"
+                  />
+                  <input
+                    ref={examDescriptionFileRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleExamImageUpload(file, 'description');
+                    }}
                   />
                 </div>
                 <div className="md:col-span-2">
@@ -2430,13 +2567,34 @@ function AdminPageContent() {
                   />
                 </div>
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">解析（可選）</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-sm font-medium text-gray-700">解析（可選）</label>
+                    <button
+                      type="button"
+                      onClick={() => examExplanationFileRef.current?.click()}
+                      disabled={examImageUploading}
+                      className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded disabled:opacity-50"
+                    >
+                      {examImageUploading ? '上傳中...' : '上傳圖片'}
+                    </button>
+                  </div>
                   <textarea
+                    ref={examExplanationRef}
                     value={examForm.explanation}
                     onChange={(e) => setExamForm({ ...examForm, explanation: e.target.value })}
                     className="w-full p-2 bg-white text-gray-900 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                     rows={2}
                     placeholder="解析/說明"
+                  />
+                  <input
+                    ref={examExplanationFileRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleExamImageUpload(file, 'explanation');
+                    }}
                   />
                 </div>
                 <div>
@@ -4571,15 +4729,36 @@ P-2021-05,"下列何者屬於氧化反應？","鐵生鏽",2021,"[""鐵生鏽"","
 
                 {/* JSON 輸入框 */}
                 <div className="mb-4">
-                  <label className="block text-sm font-medium mb-2">
-                    題目資料（JSON 格式）
-                  </label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium">
+                      題目資料（JSON 格式）
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => batchImageInputRef.current?.click()}
+                      disabled={batchImageUploading}
+                      className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded disabled:opacity-50"
+                    >
+                      {batchImageUploading ? '上傳中...' : '上傳圖片（插入 Markdown）'}
+                    </button>
+                  </div>
                   <textarea
+                    ref={batchInputRef}
                     value={batchInputText}
                     onChange={(e) => setBatchInputText(e.target.value)}
                     className="w-full p-3 bg-white text-gray-900 border border-gray-300 rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     rows={12}
                     placeholder='[\n  {\n    "difficulty": "easy",\n    "qtype": "input",\n    "prompt": "計算 3 + 5 = ?",\n    "answer": "8",\n    "explain": "3 + 5 = 8"\n  }\n]'
+                  />
+                  <input
+                    ref={batchImageInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleBatchImageUpload(file);
+                    }}
                   />
                 </div>
 
@@ -4688,7 +4867,7 @@ P-2021-05,"下列何者屬於氧化反應？","鐵生鏽",2021,"[""鐵生鏽"","
                           <span className="text-sm text-gray-500">
                             {q.difficulty} | {q.qtype}
                           </span>
-                          <p className="text-gray-800 mt-1">{q.prompt}</p>
+                          <p className="text-gray-800 mt-1">{q.prompt_md || q.prompt}</p>
                           <p className="text-sm text-gray-600 mt-2">答案: {q.answer}</p>
                         </div>
                       </div>
