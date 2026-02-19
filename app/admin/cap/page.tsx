@@ -12,9 +12,11 @@ type ExamQuestion = {
   year?: number | null;
   code: string;
   description: string;
+  description_md?: string | null;
   options: any;
   answer: any;
   explanation?: string | null;
+  explanation_md?: string | null;
   difficulty?: string | null;
   question_no?: number | null;
   order_index?: number | null;
