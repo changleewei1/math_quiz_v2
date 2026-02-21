@@ -5,6 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { getQuizModeName, getSubjectName } from '@/types/quizMode';
+import ReactMarkdown from 'react-markdown';
+import remarkBreaks from 'remark-breaks';
 
 interface TypeStat {
   typeId: string;
@@ -33,6 +35,19 @@ interface StudentReport {
   totalQuestions: number;
   correctQuestions: number;
   overallAccuracy: number;
+  attempts?: Array<{
+    questionId: string;
+    typeId: string;
+    difficulty: string;
+    qtype: string;
+    prompt: string;
+    userAnswer: string | null;
+    selectedChoiceIndex: number | null;
+    isCorrect: boolean;
+    timeSpent: number | null;
+    correctAnswer?: string | null;
+    correctAnswerMd?: string | null;
+  }>;
 }
 
 interface ClassAvg {
@@ -57,6 +72,37 @@ export default function ClassStudentReportPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [studentName, setStudentName] = useState<string>('');
+  const [showWrongQuestions, setShowWrongQuestions] = useState(false);
+
+  const renderMarkdown = (content: string) => (
+    <ReactMarkdown
+      remarkPlugins={[remarkBreaks]}
+      components={{
+        img: ({ ...props }) => (
+          <img
+            {...props}
+            alt={props.alt || 'image'}
+            className="max-w-full h-auto my-3 rounded border border-gray-200"
+          />
+        ),
+        p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  );
+
+  const formatAnswer = (value: any) => {
+    if (value === null || value === undefined) return '—';
+    if (Array.isArray(value) || typeof value === 'object') {
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return String(value);
+      }
+    }
+    return String(value);
+  };
 
   useEffect(() => {
     const fetchReport = async () => {
@@ -275,6 +321,47 @@ export default function ClassStudentReportPage() {
             ))}
           </div>
         </div>
+
+        {/* 錯題清單 */}
+        {studentReport.attempts && studentReport.attempts.length > 0 && (
+          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+            <button
+              onClick={() => setShowWrongQuestions(!showWrongQuestions)}
+              className="text-xl font-bold text-gray-800 mb-4 flex items-center"
+            >
+              錯題清單 ({studentReport.attempts.length} 題)
+              <span className="ml-2 text-lg">{showWrongQuestions ? '▼' : '▶'}</span>
+            </button>
+            {showWrongQuestions && (
+              <div className="space-y-4">
+                {studentReport.attempts.map((attempt, idx) => (
+                  <div key={`${attempt.questionId}-${idx}`} className="border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-semibold text-gray-600">
+                        題型：{attempt.typeId} | 難度：{attempt.difficulty}
+                      </span>
+                      {attempt.timeSpent && (
+                        <span className="text-sm text-gray-500">作答時間：{attempt.timeSpent}秒</span>
+                      )}
+                    </div>
+                    <p className="text-gray-800 mb-2">{attempt.prompt}</p>
+                    <p className="text-sm text-red-600">
+                      學生答案：
+                      {attempt.userAnswer ||
+                        (attempt.selectedChoiceIndex !== null ? `選項 ${attempt.selectedChoiceIndex + 1}` : '未作答')}
+                    </p>
+                    <div className="text-sm text-green-700 mt-2">
+                      正確答案：
+                      {attempt.correctAnswerMd
+                        ? renderMarkdown(attempt.correctAnswerMd)
+                        : formatAnswer(attempt.correctAnswer)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

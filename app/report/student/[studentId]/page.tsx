@@ -5,6 +5,8 @@ import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { getQuizModeName, getSubjectName } from '@/types/quizMode';
+import ReactMarkdown from 'react-markdown';
+import remarkBreaks from 'remark-breaks';
 
 interface TypeStat {
   typeId: string;
@@ -28,6 +30,8 @@ interface Attempt {
   selectedChoiceIndex: number | null;
   isCorrect: boolean;
   timeSpent: number | null;
+  correctAnswer?: string | null;
+  correctAnswerMd?: string | null;
 }
 
 interface ReportData {
@@ -58,6 +62,36 @@ export default function StudentReportPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showWrongQuestions, setShowWrongQuestions] = useState(false);
+
+  const renderMarkdown = (content: string) => (
+    <ReactMarkdown
+      remarkPlugins={[remarkBreaks]}
+      components={{
+        img: ({ ...props }) => (
+          <img
+            {...props}
+            alt={props.alt || 'image'}
+            className="max-w-full h-auto my-3 rounded border border-gray-200"
+          />
+        ),
+        p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  );
+
+  const formatAnswer = (value: any) => {
+    if (value === null || value === undefined) return '—';
+    if (Array.isArray(value) || typeof value === 'object') {
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return String(value);
+      }
+    }
+    return String(value);
+  };
 
   useEffect(() => {
     if (!studentId || !token) {
@@ -263,6 +297,12 @@ export default function StudentReportPage() {
                     <p className="text-sm text-red-600">
                       您的答案：{attempt.userAnswer || (attempt.selectedChoiceIndex !== null ? `選項 ${attempt.selectedChoiceIndex + 1}` : '未作答')}
                     </p>
+                    <div className="text-sm text-green-700 mt-2">
+                      正確答案：
+                      {attempt.correctAnswerMd
+                        ? renderMarkdown(attempt.correctAnswerMd)
+                        : formatAnswer(attempt.correctAnswer)}
+                    </div>
                   </div>
                 ))}
               </div>

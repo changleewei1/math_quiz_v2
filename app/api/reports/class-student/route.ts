@@ -76,6 +76,37 @@ export async function GET(request: NextRequest) {
       avgAccuracy: summary.avgAccuracy,
     }));
 
+    const wrongAttempts = studentResult.attempts
+      .filter((a: any) => !a.is_correct)
+      .map((a: any) => ({
+        questionId: a.question_id,
+        typeId: a.type_id,
+        difficulty: a.difficulty,
+        qtype: a.qtype,
+        prompt: a.prompt_snapshot,
+        userAnswer: a.user_answer,
+        selectedChoiceIndex: a.selected_choice_index,
+        isCorrect: a.is_correct,
+        timeSpent: a.time_spent_sec,
+      }));
+
+    const questionIds = wrongAttempts.map((a: any) => a.questionId).filter(Boolean);
+    let questionMap = new Map<string, any>();
+    if (questionIds.length > 0) {
+      const { data: questions, error: qError } = await supabase
+        .from('questions')
+        .select('id, answer, answer_md')
+        .in('id', questionIds);
+      if (qError) throw qError;
+      questionMap = new Map((questions || []).map((q: any) => [q.id, q]));
+    }
+
+    const enrichedWrongAttempts = wrongAttempts.map((a: any) => ({
+      ...a,
+      correctAnswer: questionMap.get(a.questionId)?.answer || null,
+      correctAnswerMd: questionMap.get(a.questionId)?.answer_md || null,
+    }));
+
     return NextResponse.json({
       studentReport: {
         latestSession: {
@@ -92,6 +123,7 @@ export async function GET(request: NextRequest) {
         totalQuestions: studentResult.totalQuestions,
         correctQuestions: studentResult.correctQuestions,
         overallAccuracy: studentResult.overallAccuracy,
+        attempts: enrichedWrongAttempts,
       },
       classAvgByType,
     });

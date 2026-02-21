@@ -76,6 +76,23 @@ export async function GET(request: NextRequest) {
         timeSpent: a.time_spent_sec,
       }));
 
+    const questionIds = wrongAttempts.map((a: any) => a.questionId).filter(Boolean);
+    let questionMap = new Map<string, any>();
+    if (questionIds.length > 0) {
+      const { data: questions, error: qError } = await supabaseServer()
+        .from('questions')
+        .select('id, answer, answer_md')
+        .in('id', questionIds);
+      if (qError) throw qError;
+      questionMap = new Map((questions || []).map((q: any) => [q.id, q]));
+    }
+
+    const enrichedWrongAttempts = wrongAttempts.map((a: any) => ({
+      ...a,
+      correctAnswer: questionMap.get(a.questionId)?.answer || null,
+      correctAnswerMd: questionMap.get(a.questionId)?.answer_md || null,
+    }));
+
     return NextResponse.json({
       latestSession: {
         id: result.session.id,
@@ -91,7 +108,7 @@ export async function GET(request: NextRequest) {
       totalQuestions: result.totalQuestions,
       correctQuestions: result.correctQuestions,
       overallAccuracy: result.overallAccuracy,
-      attempts: wrongAttempts,
+      attempts: enrichedWrongAttempts,
     });
   } catch (error: any) {
     console.error('取得學生報表失敗:', error);
