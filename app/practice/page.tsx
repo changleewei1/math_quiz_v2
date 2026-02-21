@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import type { Chapter, QuestionTypeData, Question } from '@/types';
 import QuestionRenderer from '@/components/questions/QuestionRenderer';
+import ReactMarkdown from 'react-markdown';
+import remarkBreaks from 'remark-breaks';
 import { isAnswerMatch } from '@/lib/answerMatch';
 
 type Difficulty = 'easy' | 'medium' | 'hard';
@@ -631,6 +633,36 @@ function PracticePageContent() {
     return formatTime(timeMs);
   };
 
+  const renderMarkdown = (content: string) => (
+    <ReactMarkdown
+      remarkPlugins={[remarkBreaks]}
+      components={{
+        img: ({ ...props }) => (
+          <img
+            {...props}
+            alt={props.alt || 'image'}
+            className="max-w-full h-auto my-3 rounded border border-gray-200"
+          />
+        ),
+        p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  );
+
+  const formatAnswer = (value: any) => {
+    if (value === null || value === undefined) return '—';
+    if (Array.isArray(value) || typeof value === 'object') {
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return String(value);
+      }
+    }
+    return String(value);
+  };
+
   const formatDuration = (timeMs: number) => {
     const totalSeconds = Math.floor(timeMs / 1000);
     const hours = Math.floor(totalSeconds / 3600);
@@ -765,16 +797,25 @@ function PracticePageContent() {
                     </div>
                   </div>
                 </div>
-                <div className="space-y-2 text-sm text-gray-700 max-h-60 overflow-y-auto border-t pt-3">
+                <div className="space-y-3 text-sm text-gray-700 max-h-60 overflow-y-auto border-t pt-3">
                   {attempts.length === 0 && <p>—</p>}
                   {attempts.map((attempt, idx) => (
-                    <div key={attempt.id} className="flex justify-between gap-2">
-                      <span className="truncate">
-                        第 {idx + 1} 題：{attempt.prompt_snapshot || attempt.question_id}
-                      </span>
-                      <span className="whitespace-nowrap text-gray-500">
-                        {formatAttemptTime(attempt.time_spent_ms)}
-                      </span>
+                    <div key={attempt.id} className="border rounded p-3">
+                      <div className="flex justify-between gap-2 text-xs text-gray-500 mb-2">
+                        <span>第 {idx + 1} 題</span>
+                        <span className="whitespace-nowrap">
+                          {formatAttemptTime(attempt.time_spent_ms)}
+                        </span>
+                      </div>
+                      <div className="text-gray-800 mb-2">
+                        {attempt.prompt_snapshot || attempt.question_id}
+                      </div>
+                      <div className="text-sm text-gray-700">
+                        正確答案：
+                        {attempt.question?.answer_md
+                          ? renderMarkdown(attempt.question.answer_md)
+                          : formatAnswer(attempt.question?.answer)}
+                      </div>
                     </div>
                   ))}
                 </div>

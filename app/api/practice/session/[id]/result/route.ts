@@ -15,7 +15,23 @@ export async function GET(
 
     if (error) throw error;
 
-    return NextResponse.json({ attempts: attempts || [] });
+    const questionIds = (attempts || []).map((a: any) => a.question_id).filter(Boolean);
+    let questionMap = new Map<string, any>();
+    if (questionIds.length > 0) {
+      const { data: questions, error: qError } = await supabase
+        .from('questions')
+        .select('id, answer, answer_md, prompt, prompt_md')
+        .in('id', questionIds);
+      if (qError) throw qError;
+      questionMap = new Map((questions || []).map((q: any) => [q.id, q]));
+    }
+
+    const merged = (attempts || []).map((a: any) => ({
+      ...a,
+      question: questionMap.get(a.question_id) || null,
+    }));
+
+    return NextResponse.json({ attempts: merged });
   } catch (error: any) {
     return NextResponse.json(
       { error: error.message || '載入練習結果失敗' },

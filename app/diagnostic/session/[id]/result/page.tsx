@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import ReactMarkdown from 'react-markdown';
+import remarkBreaks from 'remark-breaks';
 
 export default function DiagnosticResultPage() {
   const params = useParams<{ id: string }>();
@@ -74,6 +76,36 @@ export default function DiagnosticResultPage() {
       .slice(0, 3);
     return { avgTimeMs, slowestAnswers };
   }, [answers]);
+
+  const renderMarkdown = (content: string) => (
+    <ReactMarkdown
+      remarkPlugins={[remarkBreaks]}
+      components={{
+        img: ({ ...props }) => (
+          <img
+            {...props}
+            alt={props.alt || 'image'}
+            className="max-w-full h-auto my-3 rounded border border-gray-200"
+          />
+        ),
+        p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  );
+
+  const formatAnswer = (value: any) => {
+    if (value === null || value === undefined) return '—';
+    if (Array.isArray(value) || typeof value === 'object') {
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return String(value);
+      }
+    }
+    return String(value);
+  };
 
   if (error) {
     return (
@@ -189,6 +221,12 @@ export default function DiagnosticResultPage() {
                 <p className={`text-sm ${a.is_correct ? 'text-green-600' : 'text-red-600'}`}>
                   {a.is_correct ? '答對' : '答錯'}
                 </p>
+                <div className="text-sm text-gray-700 mt-2">
+                  正確答案：
+                  {a.question?.answer_md
+                    ? renderMarkdown(a.question.answer_md)
+                    : formatAnswer(a.question?.answer)}
+                </div>
               </div>
             ))}
           </div>
