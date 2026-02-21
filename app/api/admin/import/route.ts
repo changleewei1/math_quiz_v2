@@ -37,6 +37,7 @@ export async function POST(request: NextRequest) {
       prompt: resolvedPrompt,
       prompt_md: q.prompt_md || null,
       answer: q.answer,
+      answer_md: q.answer_md || null,
       choices: q.choices || null,
       correct_choice_index: q.correct_choice_index ?? null,
       equation: q.equation || null,

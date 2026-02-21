@@ -15,6 +15,7 @@ type ExamQuestion = {
   description_md?: string | null;
   options: string[] | null;
   answer: any;
+  answer_md?: string | null;
   explanation?: string | null;
   explanation_md?: string | null;
   question_no?: number | null;
@@ -267,7 +268,10 @@ export default function MockExamSessionPage() {
                           你的答案：{formatAnswer(answers[q.id])}
                         </div>
                         <div className="text-sm text-green-700">
-                          正確答案：{formatAnswer(q.answer)}
+                          正確答案：
+                          {q.answer_md
+                            ? renderMarkdown(q.answer_md)
+                            : formatAnswer(q.answer)}
                         </div>
                         {(q.explanation_md || q.explanation) && (
                           <div className="text-sm text-gray-600 mt-2">

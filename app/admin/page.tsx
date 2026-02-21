@@ -1259,6 +1259,7 @@ function AdminPageContent() {
     description: '',
     options: '',
     answer: '',
+    answerMd: '',
     explanation: '',
     difficulty: '',
     isActive: true,
@@ -1266,8 +1267,10 @@ function AdminPageContent() {
   const [examImageUploading, setExamImageUploading] = useState(false);
   const examDescriptionRef = useRef<HTMLTextAreaElement | null>(null);
   const examExplanationRef = useRef<HTMLTextAreaElement | null>(null);
+  const examAnswerRef = useRef<HTMLTextAreaElement | null>(null);
   const examDescriptionFileRef = useRef<HTMLInputElement | null>(null);
   const examExplanationFileRef = useRef<HTMLInputElement | null>(null);
+  const examAnswerFileRef = useRef<HTMLInputElement | null>(null);
   const [showExamImport, setShowExamImport] = useState(false);
   const [examImportText, setExamImportText] = useState('');
   const [examImportLoading, setExamImportLoading] = useState(false);
@@ -1810,9 +1813,12 @@ function AdminPageContent() {
         year: examForm.year ? Number(examForm.year) : null,
         code: examForm.code.trim(),
         description: examForm.description.trim(),
+        description_md: examForm.description.trim() || null,
         options: optionsValue,
         answer: answerValue,
+        answer_md: examForm.answerMd.trim() || null,
         explanation: examForm.explanation.trim() || null,
+        explanation_md: examForm.explanation.trim() || null,
         difficulty: examForm.difficulty.trim() || null,
         is_active: examForm.isActive,
       };
@@ -1836,6 +1842,7 @@ function AdminPageContent() {
         description: '',
         options: '',
         answer: '',
+        answerMd: '',
         explanation: '',
         difficulty: '',
         isActive: true,
@@ -1852,7 +1859,7 @@ function AdminPageContent() {
   const insertExamAtCursor = (
     ref: React.RefObject<HTMLTextAreaElement>,
     value: string,
-    field: 'description' | 'explanation'
+    field: 'description' | 'explanation' | 'answerMd'
   ) => {
     const target = ref.current;
     if (!target) {
@@ -1870,7 +1877,7 @@ function AdminPageContent() {
     });
   };
 
-  const handleExamImageUpload = async (file: File, field: 'description' | 'explanation') => {
+  const handleExamImageUpload = async (file: File, field: 'description' | 'explanation' | 'answerMd') => {
     setExamImageUploading(true);
     setExamError('');
     try {
@@ -1889,13 +1896,20 @@ function AdminPageContent() {
         setExamError(data.error || '上傳失敗');
         return;
       }
-      insertExamAtCursor(field === 'description' ? examDescriptionRef : examExplanationRef, `![image](${data.url})`, field);
+      if (field === 'description') {
+        insertExamAtCursor(examDescriptionRef, `![image](${data.url})`, field);
+      } else if (field === 'explanation') {
+        insertExamAtCursor(examExplanationRef, `![image](${data.url})`, field);
+      } else {
+        insertExamAtCursor(examAnswerRef, `![image](${data.url})`, field);
+      }
     } catch (err: any) {
       setExamError(err.message || '上傳失敗');
     } finally {
       setExamImageUploading(false);
       if (field === 'description' && examDescriptionFileRef.current) examDescriptionFileRef.current.value = '';
       if (field === 'explanation' && examExplanationFileRef.current) examExplanationFileRef.current.value = '';
+      if (field === 'answerMd' && examAnswerFileRef.current) examAnswerFileRef.current.value = '';
     }
   };
 
@@ -1910,6 +1924,7 @@ function AdminPageContent() {
         Array.isArray(q.answer) || typeof q.answer === 'object'
           ? JSON.stringify(q.answer)
           : String(q.answer ?? ''),
+      answerMd: q.answer_md || '',
       explanation: q.explanation || '',
       difficulty: q.difficulty || '',
       isActive: typeof q.is_active === 'boolean' ? q.is_active : true,
@@ -1927,6 +1942,7 @@ function AdminPageContent() {
         Array.isArray(q.answer) || typeof q.answer === 'object'
           ? JSON.stringify(q.answer)
           : String(q.answer ?? ''),
+      answerMd: q.answer_md || '',
       explanation: q.explanation || '',
       difficulty: q.difficulty || '',
       isActive: typeof q.is_active === 'boolean' ? q.is_active : true,
@@ -2568,6 +2584,37 @@ function AdminPageContent() {
                 </div>
                 <div className="md:col-span-2">
                   <div className="flex items-center justify-between mb-1">
+                    <label className="block text-sm font-medium text-gray-700">答案顯示（Markdown，可選）</label>
+                    <button
+                      type="button"
+                      onClick={() => examAnswerFileRef.current?.click()}
+                      disabled={examImageUploading}
+                      className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded disabled:opacity-50"
+                    >
+                      {examImageUploading ? '上傳中...' : '上傳圖片'}
+                    </button>
+                  </div>
+                  <textarea
+                    ref={examAnswerRef}
+                    value={examForm.answerMd}
+                    onChange={(e) => setExamForm({ ...examForm, answerMd: e.target.value })}
+                    className="w-full p-2 bg-white text-gray-900 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    rows={2}
+                    placeholder="支援 Markdown 圖片語法 ![image](url)"
+                  />
+                  <input
+                    ref={examAnswerFileRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleExamImageUpload(file, 'answerMd');
+                    }}
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <div className="flex items-center justify-between mb-1">
                     <label className="block text-sm font-medium text-gray-700">解析（可選）</label>
                     <button
                       type="button"
@@ -2634,6 +2681,7 @@ function AdminPageContent() {
                         description: '',
                         options: '',
                         answer: '',
+                        answerMd: '',
                         explanation: '',
                         difficulty: '',
                         isActive: true,
@@ -2652,6 +2700,7 @@ function AdminPageContent() {
                       description: '',
                       options: '',
                       answer: '',
+                      answerMd: '',
                       explanation: '',
                       difficulty: '',
                       isActive: true,

@@ -23,6 +23,7 @@ export default function EditQuestionPage({ params }: { params: { id: string } })
     prompt: '',
     prompt_md: '',
     answer: '',
+    answer_md: '',
     choices: null,
     correct_choice_index: null,
     equation: null,
@@ -42,11 +43,14 @@ export default function EditQuestionPage({ params }: { params: { id: string } })
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [showPromptPreview, setShowPromptPreview] = useState(false);
   const [showExplainPreview, setShowExplainPreview] = useState(false);
+  const [showAnswerPreview, setShowAnswerPreview] = useState(false);
   const [uploadingMdImage, setUploadingMdImage] = useState(false);
   const promptRef = useRef<HTMLTextAreaElement | null>(null);
   const explainRef = useRef<HTMLTextAreaElement | null>(null);
+  const answerRef = useRef<HTMLTextAreaElement | null>(null);
   const promptFileRef = useRef<HTMLInputElement | null>(null);
   const explainFileRef = useRef<HTMLInputElement | null>(null);
+  const answerFileRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (params.id !== 'new') {
@@ -78,6 +82,7 @@ export default function EditQuestionPage({ params }: { params: { id: string } })
           prompt: q.prompt || '',
           prompt_md: q.prompt_md || '',
           answer: q.answer || '',
+          answer_md: q.answer_md || '',
           choices: q.choices || null,
           correct_choice_index: q.correct_choice_index ?? null,
           equation: q.equation || null,
@@ -138,6 +143,7 @@ export default function EditQuestionPage({ params }: { params: { id: string } })
         prompt: resolvedPrompt,
         prompt_md: question.prompt_md?.trim() || null,
         answer: question.answer,
+        answer_md: question.answer_md?.trim() || null,
       };
 
       // 如果是插入模式，設定 created_at 來控制順序
@@ -205,7 +211,7 @@ export default function EditQuestionPage({ params }: { params: { id: string } })
   const insertAtCursor = (
     ref: React.RefObject<HTMLTextAreaElement>,
     value: string,
-    field: 'prompt_md' | 'explain_md'
+    field: 'prompt_md' | 'explain_md' | 'answer_md'
   ) => {
     const target = ref.current;
     if (!target) {
@@ -223,7 +229,7 @@ export default function EditQuestionPage({ params }: { params: { id: string } })
     });
   };
 
-  const uploadMarkdownImage = async (file: File, field: 'prompt_md' | 'explain_md') => {
+  const uploadMarkdownImage = async (file: File, field: 'prompt_md' | 'explain_md' | 'answer_md') => {
     if (!chapterId || !typeId) {
       setError('缺少章節或題型資訊');
       return;
@@ -255,13 +261,20 @@ export default function EditQuestionPage({ params }: { params: { id: string } })
       }
 
       const markdown = `![image](${publicUrlData.publicUrl})`;
-      insertAtCursor(field === 'prompt_md' ? promptRef : explainRef, markdown, field);
+      if (field === 'prompt_md') {
+        insertAtCursor(promptRef, markdown, field);
+      } else if (field === 'explain_md') {
+        insertAtCursor(explainRef, markdown, field);
+      } else {
+        insertAtCursor(answerRef, markdown, field);
+      }
     } catch (err: any) {
       setError(err.message || '上傳失敗');
     } finally {
       setUploadingMdImage(false);
       if (field === 'prompt_md' && promptFileRef.current) promptFileRef.current.value = '';
       if (field === 'explain_md' && explainFileRef.current) explainFileRef.current.value = '';
+      if (field === 'answer_md' && answerFileRef.current) answerFileRef.current.value = '';
     }
   };
 
@@ -700,6 +713,66 @@ export default function EditQuestionPage({ params }: { params: { id: string } })
               onChange={(e) => setQuestion({ ...question, answer: e.target.value })}
               className="w-full p-2 bg-white text-gray-900 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder:text-gray-400"
               required
+            />
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium">答案顯示（Markdown，可選）</label>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAnswerPreview((prev) => !prev)}
+                  className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded"
+                >
+                  {showAnswerPreview ? '編輯' : '預覽'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => answerFileRef.current?.click()}
+                  disabled={uploadingMdImage}
+                  className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded disabled:opacity-50"
+                >
+                  {uploadingMdImage ? '上傳中...' : '上傳圖片'}
+                </button>
+              </div>
+            </div>
+            {!showAnswerPreview ? (
+              <textarea
+                ref={answerRef}
+                value={question.answer_md || ''}
+                onChange={(e) => setQuestion({ ...question, answer_md: e.target.value })}
+                className="w-full p-2 border rounded font-mono text-sm"
+                rows={3}
+                placeholder="支援 Markdown，例如：![image](url)"
+              />
+            ) : (
+              <div className="w-full p-3 border rounded bg-gray-50">
+                <ReactMarkdown
+                  remarkPlugins={[remarkBreaks]}
+                  components={{
+                    img: ({ ...props }) => (
+                      <img
+                        {...props}
+                        alt={props.alt || 'image'}
+                        className="max-w-full h-auto my-3 rounded border border-gray-200"
+                      />
+                    ),
+                    p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
+                  }}
+                >
+                  {question.answer_md || ''}
+                </ReactMarkdown>
+              </div>
+            )}
+            <input
+              ref={answerFileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) uploadMarkdownImage(file, 'answer_md');
+              }}
             />
           </div>
 

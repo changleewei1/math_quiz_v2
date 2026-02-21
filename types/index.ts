@@ -39,6 +39,7 @@ export interface Question {
   prompt: string;
   prompt_md?: string | null;
   answer: string;
+  answer_md?: string | null;
   choices: string[] | null;
   correct_choice_index: number | null;
   equation: string | null;

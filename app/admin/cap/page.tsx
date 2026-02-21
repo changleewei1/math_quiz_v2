@@ -15,6 +15,7 @@ type ExamQuestion = {
   description_md?: string | null;
   options: any;
   answer: any;
+  answer_md?: string | null;
   explanation?: string | null;
   explanation_md?: string | null;
   difficulty?: string | null;
@@ -35,6 +36,7 @@ export default function AdminCapPage() {
     description: '',
     options: '',
     answer: '',
+    answerMd: '',
     explanation: '',
     difficulty: '',
     questionNo: '',
@@ -43,11 +45,14 @@ export default function AdminCapPage() {
   });
   const [showPromptPreview, setShowPromptPreview] = useState(false);
   const [showExplainPreview, setShowExplainPreview] = useState(false);
+  const [showAnswerPreview, setShowAnswerPreview] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const promptRef = useRef<HTMLTextAreaElement | null>(null);
   const explainRef = useRef<HTMLTextAreaElement | null>(null);
+  const answerRef = useRef<HTMLTextAreaElement | null>(null);
   const promptFileRef = useRef<HTMLInputElement | null>(null);
   const explainFileRef = useRef<HTMLInputElement | null>(null);
+  const answerFileRef = useRef<HTMLInputElement | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [importText, setImportText] = useState('');
@@ -115,6 +120,7 @@ export default function AdminCapPage() {
       description: '',
       options: '',
       answer: '',
+      answerMd: '',
       explanation: '',
       difficulty: '',
       questionNo: '',
@@ -123,6 +129,7 @@ export default function AdminCapPage() {
     });
     setShowPromptPreview(false);
     setShowExplainPreview(false);
+    setShowAnswerPreview(false);
   };
 
   const handleSave = async () => {
@@ -164,6 +171,7 @@ export default function AdminCapPage() {
       description_md: form.description.trim() || null,
       options: optionsValue,
       answer: answerValue,
+      answer_md: form.answerMd.trim() || null,
       explanation: form.explanation.trim() || null,
       explanation_md: form.explanation.trim() || null,
       difficulty: form.difficulty.trim() || null,
@@ -196,6 +204,7 @@ export default function AdminCapPage() {
         Array.isArray(q.answer) || typeof q.answer === 'object'
           ? JSON.stringify(q.answer)
           : String(q.answer ?? ''),
+      answerMd: q.answer_md || '',
       explanation: q.explanation_md || q.explanation || '',
       difficulty: q.difficulty || '',
       questionNo: q.question_no ? String(q.question_no) : '',
@@ -204,6 +213,7 @@ export default function AdminCapPage() {
     });
     setShowPromptPreview(false);
     setShowExplainPreview(false);
+    setShowAnswerPreview(false);
   };
 
   const handleInsert = (q: ExamQuestion) => {
@@ -216,6 +226,7 @@ export default function AdminCapPage() {
         Array.isArray(q.answer) || typeof q.answer === 'object'
           ? JSON.stringify(q.answer)
           : String(q.answer ?? ''),
+      answerMd: q.answer_md || '',
       explanation: q.explanation_md || q.explanation || '',
       difficulty: q.difficulty || '',
       questionNo: q.question_no ? String(q.question_no) : '',
@@ -224,9 +235,14 @@ export default function AdminCapPage() {
     });
     setShowPromptPreview(false);
     setShowExplainPreview(false);
+    setShowAnswerPreview(false);
   };
 
-  const insertAtCursor = (ref: React.RefObject<HTMLTextAreaElement>, value: string, field: 'description' | 'explanation') => {
+  const insertAtCursor = (
+    ref: React.RefObject<HTMLTextAreaElement>,
+    value: string,
+    field: 'description' | 'explanation' | 'answerMd'
+  ) => {
     const target = ref.current;
     if (!target) {
       setForm((prev) => ({ ...prev, [field]: `${prev[field] || ''}\n${value}` }));
@@ -243,7 +259,7 @@ export default function AdminCapPage() {
     });
   };
 
-  const uploadImage = async (file: File, field: 'description' | 'explanation') => {
+  const uploadImage = async (file: File, field: 'description' | 'explanation' | 'answerMd') => {
     if (!selectedYear) {
       setError('請先選擇年份');
       return;
@@ -266,13 +282,20 @@ export default function AdminCapPage() {
         return;
       }
       const markdown = `![image](${data.url})`;
-      insertAtCursor(field === 'description' ? promptRef : explainRef, markdown, field);
+      if (field === 'description') {
+        insertAtCursor(promptRef, markdown, field);
+      } else if (field === 'explanation') {
+        insertAtCursor(explainRef, markdown, field);
+      } else {
+        insertAtCursor(answerRef, markdown, field);
+      }
     } catch (err: any) {
       setError(err.message || '上傳失敗');
     } finally {
       setUploadingImage(false);
       if (field === 'description' && promptFileRef.current) promptFileRef.current.value = '';
       if (field === 'explanation' && explainFileRef.current) explainFileRef.current.value = '';
+      if (field === 'answerMd' && answerFileRef.current) answerFileRef.current.value = '';
     }
   };
 
@@ -508,6 +531,66 @@ export default function AdminCapPage() {
                 onChange={(e) => setForm({ ...form, answer: e.target.value })}
                 className="w-full p-2 border rounded font-mono text-sm"
                 rows={2}
+              />
+            </div>
+            <div className="md:col-span-2">
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium">答案顯示（Markdown，可選）</label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAnswerPreview((prev) => !prev)}
+                    className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded"
+                  >
+                    {showAnswerPreview ? '編輯' : '預覽'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => answerFileRef.current?.click()}
+                    disabled={uploadingImage}
+                    className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded disabled:opacity-50"
+                  >
+                    {uploadingImage ? '上傳中...' : '上傳圖片'}
+                  </button>
+                </div>
+              </div>
+              {!showAnswerPreview ? (
+                <textarea
+                  ref={answerRef}
+                  value={form.answerMd}
+                  onChange={(e) => setForm({ ...form, answerMd: e.target.value })}
+                  className="w-full p-2 border rounded font-mono text-sm"
+                  rows={3}
+                  placeholder="支援 Markdown，例如：![image](url)"
+                />
+              ) : (
+                <div className="w-full p-3 border rounded bg-gray-50">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkBreaks]}
+                    components={{
+                      img: ({ ...props }) => (
+                        <img
+                          {...props}
+                          alt={props.alt || 'image'}
+                          className="max-w-full h-auto my-3 rounded border border-gray-200"
+                        />
+                      ),
+                      p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
+                    }}
+                  >
+                    {form.answerMd || ''}
+                  </ReactMarkdown>
+                </div>
+              )}
+              <input
+                ref={answerFileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) uploadImage(file, 'answerMd');
+                }}
               />
             </div>
             <div className="md:col-span-2">
