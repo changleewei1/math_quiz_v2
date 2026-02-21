@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import type { ReactNode } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
@@ -41,6 +42,7 @@ interface StudentReport {
     difficulty: string;
     qtype: string;
     prompt: string;
+    promptMd?: string | null;
     userAnswer: string | null;
     selectedChoiceIndex: number | null;
     isCorrect: boolean;
@@ -85,7 +87,7 @@ export default function ClassStudentReportPage() {
             className="max-w-full h-auto my-3 rounded border border-gray-200"
           />
         ),
-        p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
+        p: ({ children }: { children: ReactNode }) => <p className="mb-3 last:mb-0">{children}</p>,
       }}
     >
       {content}
@@ -344,7 +346,9 @@ export default function ClassStudentReportPage() {
                         <span className="text-sm text-gray-500">作答時間：{attempt.timeSpent}秒</span>
                       )}
                     </div>
-                    <p className="text-gray-800 mb-2">{attempt.prompt}</p>
+                    <div className="text-gray-800 mb-2">
+                      {attempt.promptMd ? renderMarkdown(attempt.promptMd) : attempt.prompt}
+                    </div>
                     <p className="text-sm text-red-600">
                       學生答案：
                       {attempt.userAnswer ||

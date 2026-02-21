@@ -217,7 +217,11 @@ export default function DiagnosticResultPage() {
                   <span>第 {idx + 1} 題</span>
                   <span>作答時間：{formatTime(a.time_spent_ms ?? null)}</span>
                 </div>
-                <p className="text-gray-800 mb-2">{a.question?.prompt || a.question_id}</p>
+                <div className="text-gray-800 mb-2">
+                  {a.question?.prompt_md
+                    ? renderMarkdown(a.question.prompt_md)
+                    : a.question?.prompt || a.question_id}
+                </div>
                 <p className={`text-sm ${a.is_correct ? 'text-green-600' : 'text-red-600'}`}>
                   {a.is_correct ? '答對' : '答錯'}
                 </p>

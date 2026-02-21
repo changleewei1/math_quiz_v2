@@ -34,7 +34,7 @@ export async function GET(
     const questionIds = (answers || []).map((a: any) => a.question_id).filter(Boolean);
     const { data: questions, error: questionsError } = await supabase
       .from('questions')
-      .select('id, prompt, answer, answer_md, correct_choice_index, qtype')
+      .select('id, prompt, prompt_md, answer, answer_md, correct_choice_index, qtype')
       .in('id', questionIds);
 
     if (questionsError) throw questionsError;

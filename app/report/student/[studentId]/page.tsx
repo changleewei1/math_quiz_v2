@@ -26,6 +26,7 @@ interface Attempt {
   difficulty: string;
   qtype: string;
   prompt: string;
+  promptMd?: string | null;
   userAnswer: string;
   selectedChoiceIndex: number | null;
   isCorrect: boolean;
@@ -293,7 +294,9 @@ export default function StudentReportPage() {
                         <span className="text-sm text-gray-500">作答時間：{attempt.timeSpent}秒</span>
                       )}
                     </div>
-                    <p className="text-gray-800 mb-2">{attempt.prompt}</p>
+                    <div className="text-gray-800 mb-2">
+                      {attempt.promptMd ? renderMarkdown(attempt.promptMd) : attempt.prompt}
+                    </div>
                     <p className="text-sm text-red-600">
                       您的答案：{attempt.userAnswer || (attempt.selectedChoiceIndex !== null ? `選項 ${attempt.selectedChoiceIndex + 1}` : '未作答')}
                     </p>

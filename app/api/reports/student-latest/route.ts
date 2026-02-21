@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
     if (questionIds.length > 0) {
       const { data: questions, error: qError } = await supabaseServer()
         .from('questions')
-        .select('id, answer, answer_md')
+        .select('id, answer, answer_md, prompt, prompt_md')
         .in('id', questionIds);
       if (qError) throw qError;
       questionMap = new Map((questions || []).map((q: any) => [q.id, q]));
@@ -89,6 +89,8 @@ export async function GET(request: NextRequest) {
 
     const enrichedWrongAttempts = wrongAttempts.map((a: any) => ({
       ...a,
+      prompt: questionMap.get(a.questionId)?.prompt || a.prompt,
+      promptMd: questionMap.get(a.questionId)?.prompt_md || null,
       correctAnswer: questionMap.get(a.questionId)?.answer || null,
       correctAnswerMd: questionMap.get(a.questionId)?.answer_md || null,
     }));
