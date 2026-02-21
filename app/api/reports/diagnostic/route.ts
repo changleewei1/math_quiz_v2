@@ -34,6 +34,41 @@ export async function GET(request: NextRequest) {
       day: 'numeric',
     });
 
+    // 取得錯題清單（含題幹/答案圖片）
+    const { data: attempts, error: attemptsError } = await supabase
+      .from('question_attempts')
+      .select('question_id, type_id, difficulty, qtype, prompt_snapshot, user_answer, selected_choice_index, is_correct, time_spent_sec')
+      .eq('session_id', sessionId)
+      .eq('is_correct', false);
+
+    if (attemptsError) throw attemptsError;
+
+    const questionIds = (attempts || []).map((a: any) => a.question_id).filter(Boolean);
+    let questionMap = new Map<string, any>();
+    if (questionIds.length > 0) {
+      const { data: questions, error: qError } = await supabase
+        .from('questions')
+        .select('id, prompt, prompt_md, answer, answer_md')
+        .in('id', questionIds);
+      if (qError) throw qError;
+      questionMap = new Map((questions || []).map((q: any) => [q.id, q]));
+    }
+
+    const wrongAttempts = (attempts || []).map((a: any) => ({
+      questionId: a.question_id,
+      typeId: a.type_id,
+      difficulty: a.difficulty,
+      qtype: a.qtype,
+      prompt: questionMap.get(a.question_id)?.prompt || a.prompt_snapshot,
+      promptMd: questionMap.get(a.question_id)?.prompt_md || null,
+      userAnswer: a.user_answer,
+      selectedChoiceIndex: a.selected_choice_index,
+      isCorrect: a.is_correct,
+      timeSpent: a.time_spent_sec,
+      correctAnswer: questionMap.get(a.question_id)?.answer || null,
+      correctAnswerMd: questionMap.get(a.question_id)?.answer_md || null,
+    }));
+
     return NextResponse.json({
       sessionId,
       chapterId: analysis.chapterId,
@@ -46,6 +81,7 @@ export async function GET(request: NextRequest) {
       typeStatistics: analysis.typeStatistics,
       topWeaknesses: analysis.topWeaknesses,
       summary: analysis.summary,
+      attempts: wrongAttempts,
     });
   } catch (error: any) {
     console.error('取得報告失敗:', error);
