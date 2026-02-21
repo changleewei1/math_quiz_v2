@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
     if (questionIds.length > 0) {
       const { data: questions, error: qError } = await supabase
         .from('questions')
-        .select('id, prompt, prompt_md, answer, answer_md')
+        .select('id, prompt, prompt_md, answer, answer_md, explain, explain_md')
         .in('id', questionIds);
       if (qError) throw qError;
       questionMap = new Map((questions || []).map((q: any) => [q.id, q]));
@@ -67,6 +67,8 @@ export async function GET(request: NextRequest) {
       timeSpent: a.time_spent_sec,
       correctAnswer: questionMap.get(a.question_id)?.answer || null,
       correctAnswerMd: questionMap.get(a.question_id)?.answer_md || null,
+      explain: questionMap.get(a.question_id)?.explain || null,
+      explainMd: questionMap.get(a.question_id)?.explain_md || null,
     }));
 
     return NextResponse.json({

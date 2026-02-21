@@ -32,6 +32,8 @@ interface ReportData {
     timeSpent: number | null;
     correctAnswer?: string | null;
     correctAnswerMd?: string | null;
+    explain?: string | null;
+    explainMd?: string | null;
   }>;
 }
 
@@ -294,6 +296,14 @@ export default function ReportPage() {
                         ? renderMarkdown(attempt.correctAnswerMd)
                         : formatAnswer(attempt.correctAnswer)}
                     </div>
+                    {(attempt.explainMd || attempt.explain) && (
+                      <div className="text-sm text-gray-600 mt-2">
+                        <span className="font-medium">解析：</span>
+                        {attempt.explainMd
+                          ? renderMarkdown(attempt.explainMd)
+                          : attempt.explain}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

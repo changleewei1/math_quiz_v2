@@ -87,7 +87,7 @@ export default function ClassStudentReportPage() {
             className="max-w-full h-auto my-3 rounded border border-gray-200"
           />
         ),
-        p: ({ children }: { children: ReactNode }) => <p className="mb-3 last:mb-0">{children}</p>,
+        p: ({ children }: { children?: ReactNode }) => <p className="mb-3 last:mb-0">{children}</p>,
       }}
     >
       {content}
