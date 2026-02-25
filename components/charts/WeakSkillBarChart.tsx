@@ -40,11 +40,17 @@ export default function WeakSkillBarChart({ data }: { data: WeakSkillItem[] }) {
             tick={{ fontSize: 12 }}
           />
           <YAxis domain={[0, 100]} tick={{ fontSize: 12 }} />
-          <Tooltip formatter={(value: number) => [`${value}%`, '正確率']} />
+          <Tooltip
+            formatter={(value: number | undefined) => [
+              `${typeof value === 'number' ? value : 0}%`,
+              '正確率',
+            ]}
+          />
           <Bar dataKey="accuracy" fill="#60A5FA" radius={[6, 6, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>
   );
 }
+
 

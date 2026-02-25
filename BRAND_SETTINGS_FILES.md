@@ -135,7 +135,7 @@ npm run dev
 
 ## 🔐 權限控制
 
-- **後台品牌設定頁面** (`/admin/brand`)：由 middleware 保護，需 admin 登入
+- **後台品牌設定頁面** (`/admin/brand`)：由 proxy 保護，需 admin 登入
 - **API Routes** (`/api/admin/brand/*`)：使用 `verifyAdminCookie()` 驗證
 - **前台 API** (`/api/brand`)：公開 API，無需登入
 

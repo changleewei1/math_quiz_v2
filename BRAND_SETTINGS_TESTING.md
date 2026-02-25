@@ -122,7 +122,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 2. **非管理員訪問**
    - 以學生或老師身份登入
    - 嘗試訪問 `/admin/brand`
-   - **預期結果**：無法訪問（middleware 會阻擋）
+   - **預期結果**：無法訪問（proxy 會阻擋）
 
 ### 測試 7：快取機制
 

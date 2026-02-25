@@ -46,7 +46,7 @@ async function verifyCookie(signedValue: string, secret: string): Promise<string
   }
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
 
   // 保護 /admin/* 和 /api/admin/*
@@ -188,5 +188,3 @@ export const config = {
     '/api/student/:path*',
   ],
 };
-
-

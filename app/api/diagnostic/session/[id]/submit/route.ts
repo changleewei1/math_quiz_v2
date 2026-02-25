@@ -6,12 +6,13 @@ import { isAnswerMatch } from '@/lib/answerMatch';
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const body = await request.json();
     const { answers } = body || {};
-    const sessionId = params.id;
+    const { id } = await params;
+    const sessionId = id;
 
     if (!Array.isArray(answers)) {
       return NextResponse.json({ error: '缺少作答資料' }, { status: 400 });

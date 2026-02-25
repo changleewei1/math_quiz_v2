@@ -4,7 +4,7 @@ import { getTeacherSession } from '@/lib/teacherAuth';
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const teacherSession = await getTeacherSession();
@@ -12,11 +12,12 @@ export async function GET(
       return NextResponse.json({ error: '未授權' }, { status: 401 });
     }
 
+    const { id } = await params;
     const supabase = supabaseServer();
     const { data: session, error } = await supabase
       .from('diagnostic_sessions')
       .select('*')
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (error) throw error;
@@ -24,7 +25,7 @@ export async function GET(
     const { data: result, error: resultError } = await supabase
       .from('diagnostic_results')
       .select('*')
-      .eq('diagnostic_session_id', params.id)
+      .eq('diagnostic_session_id', id)
       .single();
 
     if (resultError) throw resultError;
@@ -32,7 +33,7 @@ export async function GET(
     const { data: remediation, error: remediationError } = await supabase
       .from('remediation_actions')
       .select('*')
-      .eq('diagnostic_session_id', params.id)
+      .eq('diagnostic_session_id', id)
       .order('updated_at', { ascending: false });
 
     if (remediationError) throw remediationError;

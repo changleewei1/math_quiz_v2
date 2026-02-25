@@ -95,7 +95,7 @@ math-quiz-v2/
 │   ├── schema.sql        # 資料表結構
 │   ├── seed.sql         # 初始資料
 │   └── seed_questions.sql # 題庫資料
-└── middleware.ts         # Next.js Middleware（路由保護）
+└── proxy.ts              # Next.js Proxy（路由保護）
 ```
 
 ## 題庫管理結構

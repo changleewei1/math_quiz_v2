@@ -60,6 +60,10 @@ function PracticePageContent() {
       prompt_snapshot: string | null;
       time_spent_ms: number | null;
       is_correct: boolean;
+      question?: {
+        answer?: string | null;
+        answer_md?: string | null;
+      } | null;
     }>
   >([]);
   const [attemptsLoading, setAttemptsLoading] = useState(false);

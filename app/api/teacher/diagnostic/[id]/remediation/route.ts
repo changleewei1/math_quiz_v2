@@ -5,7 +5,7 @@ import { getTeacherSession } from '@/lib/teacherAuth';
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const teacherSession = await getTeacherSession();
@@ -21,11 +21,12 @@ export async function POST(
     }
 
     const supabase = supabaseServer();
+    const { id } = await params;
     const { data, error } = await supabase
       .from('remediation_actions')
       .insert({
         id: `ra_${nanoid(12)}`,
-        diagnostic_session_id: params.id,
+        diagnostic_session_id: id,
         student_id,
         chapter_id,
         assigned_by_teacher_id: teacherSession.teacherId,

@@ -1,19 +1,6 @@
 import type { Metadata } from "next";
-import { Inter, Noto_Serif_TC } from "next/font/google";
 import "./globals.css";
 import { getBrandSettings } from "@/lib/brandSettings";
-
-const inter = Inter({ 
-  subsets: ["latin"], 
-  variable: "--font-inter",
-  display: 'swap',
-});
-const notoSerifTC = Noto_Serif_TC({ 
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-noto-serif-tc",
-  display: 'swap',
-});
 
 export const metadata: Metadata = {
   title: "題庫系統 v2",
@@ -43,10 +30,15 @@ export default async function RootLayout({
 
   return (
     <html lang="zh-TW">
-      <body 
-        className={`${inter.variable} ${notoSerifTC.variable}`}
-        style={{ fontFamily: brandSettings.font_family }}
-      >
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Noto+Serif+TC:wght@400;500;600;700&display=swap"
+        />
+      </head>
+      <body style={{ fontFamily: brandSettings.font_family }}>
         {children}
       </body>
     </html>

@@ -3,14 +3,15 @@ import { supabaseServer } from '@/lib/supabaseServer';
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = supabaseServer();
+    const { id } = await params;
     const { data: attempts, error } = await supabase
       .from('question_attempts')
       .select('id, question_id, prompt_snapshot, time_spent_ms, is_correct, created_at')
-      .eq('session_id', params.id)
+      .eq('session_id', id)
       .order('created_at', { ascending: true });
 
     if (error) throw error;

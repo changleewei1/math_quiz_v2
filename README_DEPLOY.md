@@ -62,7 +62,7 @@ npm run build
 export const dynamic = 'force-dynamic';
 ```
 
-目前專案中 `cookies()` 主要在 API route / middleware 使用，風險較低。
+目前專案中 `cookies()` 主要在 API route / proxy 使用，風險較低。
 
 ## 4) Vercel 部署步驟
 

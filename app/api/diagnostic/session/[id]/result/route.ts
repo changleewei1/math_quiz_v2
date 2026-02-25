@@ -3,15 +3,16 @@ import { supabaseServer } from '@/lib/supabaseServer';
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = supabaseServer();
+    const { id } = await params;
 
     const { data: session, error: sessionError } = await supabase
       .from('diagnostic_sessions')
       .select('*')
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (sessionError) throw sessionError;
@@ -19,7 +20,7 @@ export async function GET(
     const { data: result, error: resultError } = await supabase
       .from('diagnostic_results')
       .select('*')
-      .eq('diagnostic_session_id', params.id)
+      .eq('diagnostic_session_id', id)
       .single();
 
     if (resultError) throw resultError;
@@ -27,7 +28,7 @@ export async function GET(
     const { data: answers, error: answersError } = await supabase
       .from('diagnostic_answers')
       .select('id, question_id, is_correct, user_answer, time_spent_ms, chapter_id')
-      .eq('diagnostic_session_id', params.id);
+      .eq('diagnostic_session_id', id);
 
     if (answersError) throw answersError;
 

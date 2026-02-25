@@ -7,10 +7,23 @@ const nextConfig = {
   experimental: {
     // 允許某些頁面動態渲染
   },
+
+  turbopack: {
+    root: __dirname,
+  },
   
   // 圖片優化
   images: {
-    domains: ['quickchart.io', 'supabase.co'],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'quickchart.io',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.supabase.co',
+      },
+    ],
     unoptimized: false,
   },
 }
