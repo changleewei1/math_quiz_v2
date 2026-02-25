@@ -22,6 +22,7 @@ type ExamQuestion = {
   question_no?: number | null;
   order_index?: number | null;
   is_active: boolean;
+  [key: string]: any;
 };
 
 export default function AdminCapPage() {
