@@ -1,18 +1,19 @@
 'use client';
 
 import { useRef, useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams, useParams } from 'next/navigation';
 import type { Question } from '@/types';
 import type { MediaBlock } from '@/types/media';
 import { isImageMedia } from '@/types/media';
-import { supabaseClient } from '@/lib/supabaseClient';
 import QuestionRenderer from '@/components/questions/QuestionRenderer';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 
-export default function EditQuestionPage({ params }: { params: { id: string } }) {
+export default function EditQuestionPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const routeParams = useParams<{ id: string }>();
+  const questionId = typeof routeParams?.id === 'string' ? routeParams.id : '';
   const chapterId = searchParams.get('chapterId') || '';
   const typeId = searchParams.get('typeId') || '';
   const insertAfter = searchParams.get('insertAfter') || '';
@@ -53,7 +54,7 @@ export default function EditQuestionPage({ params }: { params: { id: string } })
   const answerFileRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    if (params.id !== 'new') {
+    if (questionId && questionId !== 'new') {
       loadQuestion();
     } else {
       // 新增模式：載入題目列表以顯示插入位置選項
@@ -63,15 +64,15 @@ export default function EditQuestionPage({ params }: { params: { id: string } })
         setLocalInsertAfter(insertAfter);
       }
     }
-  }, [params.id, insertAfter, chapterId, typeId]);
+  }, [questionId, insertAfter, chapterId, typeId]);
 
   const loadQuestion = async () => {
-    if (!params.id || params.id === 'new') return;
+    if (!questionId || questionId === 'new') return;
     
     setLoadingQuestion(true);
     setError('');
     try {
-      const res = await fetch(`/api/admin/question?id=${params.id}`);
+      const res = await fetch(`/api/admin/question?id=${questionId}`);
       const data = await res.json();
       
       if (res.ok && data.data) {
@@ -128,10 +129,10 @@ export default function EditQuestionPage({ params }: { params: { id: string } })
     setError('');
 
     try {
-      const url = params.id === 'new'
+      const url = questionId === 'new'
         ? '/api/admin/questions'
-        : `/api/admin/question?id=${params.id}`;
-      const method = params.id === 'new' ? 'POST' : 'PATCH';
+        : `/api/admin/question?id=${questionId}`;
+      const method = questionId === 'new' ? 'POST' : 'PATCH';
 
       const resolvedPrompt = question.prompt_md?.trim() || question.prompt || '';
       const resolvedExplain = question.explain_md?.trim() || question.explain || null;
@@ -150,7 +151,7 @@ export default function EditQuestionPage({ params }: { params: { id: string } })
       // 注意：題目是按 created_at 降序排列（最新的在前），所以要插入在某題之後，
       // 需要設定 created_at 比它稍早（減去時間），這樣會排在它後面
       const targetInsertAfter = localInsertAfter || insertAfter;
-      if (params.id === 'new' && targetInsertAfter && targetInsertAfter !== 'none') {
+      if (questionId === 'new' && targetInsertAfter && targetInsertAfter !== 'none') {
         const afterQuestion = questions.find(q => q.id === targetInsertAfter);
         if (afterQuestion && afterQuestion.created_at) {
           // 設定 created_at 為目標題目的時間減去 1 秒（這樣會排在它之後）
@@ -229,6 +230,29 @@ export default function EditQuestionPage({ params }: { params: { id: string } })
     });
   };
 
+  const uploadAdminImage = async (file: File, bucket: string, path: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('bucket', bucket);
+    formData.append('path', path);
+
+    const res = await fetch('/api/admin/upload-image', {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || '上傳失敗');
+    }
+
+    if (!data?.url) {
+      throw new Error('無法取得圖片 URL');
+    }
+
+    return data.url as string;
+  };
+
   const uploadMarkdownImage = async (file: File, field: 'prompt_md' | 'explain_md' | 'answer_md') => {
     if (!chapterId || !typeId) {
       setError('缺少章節或題型資訊');
@@ -240,27 +264,8 @@ export default function EditQuestionPage({ params }: { params: { id: string } })
       const ext = file.name.split('.').pop() || 'png';
       const key = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : Date.now().toString();
       const path = `questions/${chapterId}/${typeId}/${key}.${ext}`;
-      const { error: uploadError } = await supabaseClient.storage
-        .from('question-assets')
-        .upload(path, file, {
-          cacheControl: '3600',
-          upsert: true,
-          contentType: file.type || 'image/png',
-        });
-
-      if (uploadError) {
-        throw new Error(`上傳失敗: ${uploadError.message}`);
-      }
-
-      const { data: publicUrlData } = supabaseClient.storage
-        .from('question-assets')
-        .getPublicUrl(path);
-
-      if (!publicUrlData?.publicUrl) {
-        throw new Error('無法取得圖片 URL');
-      }
-
-      const markdown = `![image](${publicUrlData.publicUrl})`;
+      const publicUrl = await uploadAdminImage(file, 'question-assets', path);
+      const markdown = `![image](${publicUrl})`;
       if (field === 'prompt_md') {
         insertAtCursor(promptRef, markdown, field);
       } else if (field === 'explain_md') {
@@ -298,7 +303,7 @@ export default function EditQuestionPage({ params }: { params: { id: string } })
     }
 
     // 如果題目尚未儲存，需要先建立題目
-    if (params.id === 'new') {
+    if (questionId === 'new') {
       setError('請先儲存題目，再上傳圖片');
       return;
     }
@@ -314,38 +319,19 @@ export default function EditQuestionPage({ params }: { params: { id: string } })
     try {
       // 1. 上傳圖片到 Supabase Storage
       const fileExt = file.name.split('.').pop() || 'png';
-      const fileName = `${params.id}.${fileExt}`;
+      const fileName = `${questionId}.${fileExt}`;
       const filePath = `${chapterId}/${typeId}/${fileName}`;
-
-      const { data: uploadData, error: uploadError } = await supabaseClient.storage
-        .from('question-media')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: true, // 覆蓋舊檔案
-        });
-
-      if (uploadError) {
-        throw new Error(`上傳失敗: ${uploadError.message}`);
-      }
-
-      // 2. 取得公開 URL
-      const { data: publicUrlData } = supabaseClient.storage
-        .from('question-media')
-        .getPublicUrl(filePath);
-
-      if (!publicUrlData?.publicUrl) {
-        throw new Error('無法取得圖片 URL');
-      }
+      const publicUrl = await uploadAdminImage(file, 'question-media', filePath);
 
       // 3. 建立 media 物件
       const media: MediaBlock = {
         type: 'image',
-        url: publicUrlData.publicUrl,
+        url: publicUrl,
         caption: imageCaption.trim() || undefined,
       };
 
       // 4. 更新題目的 media 欄位
-      const updateRes = await fetch(`/api/admin/question?id=${params.id}`, {
+      const updateRes = await fetch(`/api/admin/question?id=${questionId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ media }),
@@ -359,7 +345,7 @@ export default function EditQuestionPage({ params }: { params: { id: string } })
 
       // 5. 更新本地狀態
       setQuestion({ ...question, media });
-      setImagePreview(publicUrlData.publicUrl);
+      setImagePreview(publicUrl);
       setError(''); // 清除錯誤訊息
     } catch (err: any) {
       console.error('圖片上傳失敗:', err);
@@ -373,7 +359,7 @@ export default function EditQuestionPage({ params }: { params: { id: string } })
 
   // 移除圖片
   const handleRemoveImage = async () => {
-    if (!params.id || params.id === 'new') return;
+    if (!questionId || questionId === 'new') return;
 
     if (!confirm('確定要移除圖片嗎？')) return;
 
@@ -382,7 +368,7 @@ export default function EditQuestionPage({ params }: { params: { id: string } })
 
     try {
       // 更新題目的 media 欄位為 null
-      const updateRes = await fetch(`/api/admin/question?id=${params.id}`, {
+      const updateRes = await fetch(`/api/admin/question?id=${questionId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ media: null }),
@@ -411,7 +397,7 @@ export default function EditQuestionPage({ params }: { params: { id: string } })
       <div className="max-w-4xl mx-auto bg-white p-6 rounded-lg shadow">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">
-            {params.id === 'new' ? '新增題目' : '編輯題目'}
+            {questionId === 'new' ? '新增題目' : '編輯題目'}
           </h1>
           <button
             onClick={() => {
@@ -437,7 +423,7 @@ export default function EditQuestionPage({ params }: { params: { id: string } })
           </div>
         )}
 
-        {params.id === 'new' && questions.length > 0 && (
+        {questionId === 'new' && questions.length > 0 && (
           <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
             <label className="block text-sm font-medium mb-2 text-blue-900">
               插入位置（選填）
@@ -465,7 +451,7 @@ export default function EditQuestionPage({ params }: { params: { id: string } })
           </div>
         )}
         
-        {params.id === 'new' && insertAfter && insertAfter !== 'none' && !localInsertAfter && (
+        {questionId === 'new' && insertAfter && insertAfter !== 'none' && !localInsertAfter && (
           <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
             <p className="text-sm text-blue-800">
               <strong>插入模式：</strong>此題目將插入在選定題目之後
@@ -630,11 +616,11 @@ export default function EditQuestionPage({ params }: { params: { id: string } })
                   onChange={(e) => setImageCaption(e.target.value)}
                   placeholder="例如：圖一、座標圖、統計圖表"
                   className="w-full p-2 bg-white text-gray-900 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder:text-gray-400"
-                  disabled={uploadingImage || params.id === 'new'}
+                  disabled={uploadingImage || questionId === 'new'}
                 />
               </div>
 
-              {params.id === 'new' ? (
+              {questionId === 'new' ? (
                 <div className="p-3 bg-yellow-50 border border-yellow-200 rounded">
                   <p className="text-sm text-yellow-800">
                     請先儲存題目後，才能上傳圖片
