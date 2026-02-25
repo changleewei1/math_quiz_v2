@@ -52,7 +52,6 @@ function PracticePageContent() {
   const [sessionElapsedMs, setSessionElapsedMs] = useState(0);
   const [answeredCount, setAnsweredCount] = useState(0);
   const [resultRedirectSec, setResultRedirectSec] = useState<number | null>(null);
-  const [answeredCount, setAnsweredCount] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
   const [attempts, setAttempts] = useState<
     Array<{
