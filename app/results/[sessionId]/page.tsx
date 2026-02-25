@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import type { SessionReport } from '@/lib/reportAggregation';
+import WeakSkillBarChart from '@/components/charts/WeakSkillBarChart';
+import SkillRadarChart from '@/components/charts/SkillRadarChart';
 
 export default function ResultsPage() {
   const params = useParams<{ sessionId: string }>();
@@ -91,6 +93,16 @@ export default function ResultsPage() {
             <p className="text-xl font-semibold">{report.overall.avgTimeSec} 秒</p>
           </div>
         )}
+
+        <div className="mb-6 bg-white rounded-lg border p-4">
+          <h2 className="text-lg font-semibold mb-3">弱點技能正確率</h2>
+          <WeakSkillBarChart data={report.weakTop5} />
+        </div>
+
+        <div className="mb-6 bg-white rounded-lg border p-4">
+          <h2 className="text-lg font-semibold mb-3">技能掌握度雷達圖</h2>
+          <SkillRadarChart data={report.skillStats} />
+        </div>
 
         <div className="mt-6">
           <h2 className="text-lg font-semibold mb-3">弱點技能 Top 5</h2>

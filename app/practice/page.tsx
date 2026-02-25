@@ -51,6 +51,8 @@ function PracticePageContent() {
   const sessionTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [sessionElapsedMs, setSessionElapsedMs] = useState(0);
   const [answeredCount, setAnsweredCount] = useState(0);
+  const [resultRedirectSec, setResultRedirectSec] = useState<number | null>(null);
+  const [answeredCount, setAnsweredCount] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
   const [attempts, setAttempts] = useState<
     Array<{
@@ -291,6 +293,24 @@ function PracticePageContent() {
     };
     loadAttempts();
   }, [completed, sessionId]);
+
+  useEffect(() => {
+    if (!completed || !sessionId) return;
+    setResultRedirectSec(5);
+    const timer = setInterval(() => {
+      setResultRedirectSec((prev) => {
+        if (prev === null) return prev;
+        return prev > 1 ? prev - 1 : 0;
+      });
+    }, 1000);
+    const redirect = setTimeout(() => {
+      router.replace(`/results/${sessionId}`);
+    }, 5000);
+    return () => {
+      clearInterval(timer);
+      clearTimeout(redirect);
+    };
+  }, [completed, sessionId, router]);
 
   useEffect(() => {
     if (!skillId && selectedChapter) {
@@ -842,6 +862,14 @@ function PracticePageContent() {
             >
               重新開始
             </button>
+            {sessionId && (
+              <Link
+                href={`/results/${sessionId}`}
+                className="px-6 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 inline-block"
+              >
+                前往統計結果
+              </Link>
+            )}
             <Link
               href="/"
               className="px-6 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 inline-block"
@@ -849,6 +877,11 @@ function PracticePageContent() {
               回到首頁
             </Link>
           </div>
+          {sessionId && resultRedirectSec !== null && (
+            <p className="mt-4 text-sm text-gray-500">
+              將於 {resultRedirectSec} 秒後自動前往統計結果
+            </p>
+          )}
         </div>
       </div>
     );

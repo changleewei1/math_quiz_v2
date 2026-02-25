@@ -1,18 +1,20 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 
 export default function DiagnosticResultPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const [result, setResult] = useState<any | null>(null);
   const [session, setSession] = useState<any | null>(null);
   const [chapters, setChapters] = useState<Record<string, any>>({});
   const [answers, setAnswers] = useState<any[]>([]);
   const [error, setError] = useState('');
+  const [resultRedirectSec, setResultRedirectSec] = useState<number | null>(null);
 
   useEffect(() => {
     const loadResult = async () => {
@@ -32,6 +34,24 @@ export default function DiagnosticResultPage() {
     };
     loadResult();
   }, [params.id]);
+
+  useEffect(() => {
+    if (!session?.id) return;
+    setResultRedirectSec(5);
+    const timer = setInterval(() => {
+      setResultRedirectSec((prev) => {
+        if (prev === null) return prev;
+        return prev > 1 ? prev - 1 : 0;
+      });
+    }, 1000);
+    const redirect = setTimeout(() => {
+      router.replace(`/results/${session.id}`);
+    }, 5000);
+    return () => {
+      clearInterval(timer);
+      clearTimeout(redirect);
+    };
+  }, [session?.id, router]);
 
   useEffect(() => {
     if (!result) return;
@@ -151,6 +171,22 @@ export default function DiagnosticResultPage() {
           <p className="text-2xl font-semibold">
             {Math.round((result.overall_summary?.accuracy || 0) * 100)}%
           </p>
+        </div>
+        <div className="mb-6 flex items-center justify-between bg-white rounded-lg border p-4">
+          <div>
+            <p className="text-sm text-gray-600">統計結果</p>
+            {session?.id && resultRedirectSec !== null && (
+              <p className="text-xs text-gray-500">將於 {resultRedirectSec} 秒後自動前往</p>
+            )}
+          </div>
+          {session?.id && (
+            <Link
+              href={`/results/${session.id}`}
+              className="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 text-sm"
+            >
+              前往統計結果
+            </Link>
+          )}
         </div>
 
         <div className="space-y-3">
