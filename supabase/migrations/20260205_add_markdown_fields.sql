@@ -6,3 +6,4 @@ ALTER TABLE exam_questions
   ADD COLUMN IF NOT EXISTS description_md TEXT,
   ADD COLUMN IF NOT EXISTS explanation_md TEXT;
 
+

@@ -4,3 +4,4 @@ ALTER TABLE questions
 ALTER TABLE exam_questions
   ADD COLUMN IF NOT EXISTS answer_md TEXT;
 
+
