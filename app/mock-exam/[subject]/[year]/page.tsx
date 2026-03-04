@@ -117,10 +117,10 @@ export default function MockExamSessionPage() {
           <img
             {...props}
             alt={props.alt || 'image'}
-            className="max-w-full h-auto my-3 rounded border border-gray-200"
+            className="max-w-full w-auto max-h-[420px] h-auto my-4 mx-auto rounded border border-gray-200"
           />
         ),
-        p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
+        p: ({ children }) => <p className="mb-3 last:mb-0 leading-relaxed">{children}</p>,
       }}
     >
       {content}
@@ -162,7 +162,7 @@ export default function MockExamSessionPage() {
                     <div className="text-sm text-gray-500 mb-2">
                       第 {q.question_no ?? index + 1} 題
                     </div>
-                    <div className="text-gray-800 mb-3">
+                    <div className="text-gray-900 text-base sm:text-lg leading-relaxed mb-4">
                       {renderMarkdown(q.description_md || q.description || '')}
                     </div>
                     {(() => {
@@ -183,7 +183,7 @@ export default function MockExamSessionPage() {
                       return options.length > 0 ? (
                         <div className="space-y-2">
                           {options.map((opt, idx) => (
-                          <label key={idx} className="flex items-center gap-2 text-sm">
+                          <label key={idx} className="flex items-center gap-2 text-base text-gray-800">
                             <input
                               type="radio"
                               name={`q-${q.id}`}
@@ -204,7 +204,7 @@ export default function MockExamSessionPage() {
                           ))}
                         </div>
                       ) : (
-                      <input
+                          <input
                         type="text"
                         value={answers[q.id] || ''}
                         onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })}
@@ -218,7 +218,7 @@ export default function MockExamSessionPage() {
                             showFeedback(q.id, isCorrect ? 'correct' : 'wrong');
                           }
                         }}
-                        className="w-full p-2 bg-white text-gray-900 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full p-2 bg-white text-gray-900 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
                         placeholder="請輸入答案"
                       />
                       );
@@ -256,7 +256,7 @@ export default function MockExamSessionPage() {
                     {wrongQuestions.map((q, index) => (
                       <div key={q.id} className="border rounded p-4">
                         <div className="text-sm text-gray-500 mb-2">第 {index + 1} 題</div>
-                        <div className="text-gray-800 mb-3">
+                        <div className="text-gray-900 text-base sm:text-lg leading-relaxed mb-4">
                           {renderMarkdown(q.description_md || q.description || '')}
                         </div>
                         {q.options && q.options.length > 0 && (
