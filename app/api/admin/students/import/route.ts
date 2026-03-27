@@ -1,35 +1,55 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseServer } from '@/lib/supabaseServer';
+import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
+/**
+ * 延後建立 Supabase client，避免在 import / build collect page data 階段
+ * 因缺少環境變數而拋錯（舊版 @/lib/supabaseServer 會在模組頂層 throw）。
+ */
+function createSupabaseForImport() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const service = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url?.trim() || !anon?.trim()) {
+    return { ok: false as const, message: '伺服器未設定 NEXT_PUBLIC_SUPABASE_URL 或 NEXT_PUBLIC_SUPABASE_ANON_KEY' };
+  }
+  const key = service?.trim() || anon;
+  return {
+    ok: true as const,
+    client: createClient(url, key, {
+      auth: { persistSession: false },
+    }),
+  };
+}
+
 export async function POST(request: NextRequest) {
+  const supabaseInit = createSupabaseForImport();
+  if (!supabaseInit.ok) {
+    return NextResponse.json({ error: supabaseInit.message }, { status: 500 });
+  }
+  const supabase = supabaseInit.client;
+
   try {
     const body = await request.json();
     const { students } = body;
 
     if (!Array.isArray(students)) {
-      return NextResponse.json(
-        { error: 'students 必須是陣列' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'students 必須是陣列' }, { status: 400 });
     }
 
     if (students.length === 0) {
-      return NextResponse.json(
-        { error: '請提供至少一名學生' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: '請提供至少一名學生' }, { status: 400 });
     }
 
-    const supabase = supabaseServer();
     const errors: string[] = [];
     const success: string[] = [];
 
-    // 批次處理
     for (let i = 0; i < students.length; i++) {
       const student = students[i];
 
-      // 驗證必要欄位
       if (!student.name || typeof student.name !== 'string') {
         errors.push(`第 ${i + 1} 筆：缺少或無效的 name（必須是字串）`);
         continue;
@@ -40,11 +60,10 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      // 計算密碼 hash
       const passwordHash = crypto.createHash('sha256').update(student.password).digest('hex');
 
       try {
-        const { data, error: insertError } = await supabase
+        const { error: insertError } = await supabase
           .from('students')
           .insert({
             name: student.name.trim(),
@@ -63,8 +82,9 @@ export async function POST(request: NextRequest) {
         } else {
           success.push(student.name);
         }
-      } catch (err: any) {
-        errors.push(`第 ${i + 1} 筆：${err.message || '新增失敗'}`);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : '新增失敗';
+        errors.push(`第 ${i + 1} 筆：${msg}`);
       }
     }
 
@@ -76,11 +96,8 @@ export async function POST(request: NextRequest) {
       successNames: success,
       errors: errors.length > 0 ? errors : undefined,
     });
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message || '批次匯入失敗' },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : '批次匯入失敗';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
-
