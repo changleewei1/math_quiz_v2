@@ -57,20 +57,24 @@ export async function POST(request: NextRequest) {
         qtype,
         prompt,
         prompt_md,
+        prompt_content,
         answer,
         answer_md,
         choices,
+        choices_content,
         correct_choice_index,
         equation,
         tags,
         video_url,
         explain,
         explain_md,
+        explain_content,
         created_at,
       } = body;
 
-    const resolvedPrompt = prompt_md || prompt;
-    if (!chapter_id || !type_id || !difficulty || !qtype || !resolvedPrompt || !answer) {
+    const resolvedPrompt = prompt_md || prompt || '';
+    const hasPrompt = Boolean(resolvedPrompt || prompt_content);
+    if (!chapter_id || !type_id || !difficulty || !qtype || !hasPrompt || !answer) {
       return NextResponse.json(
         { error: '缺少必要欄位' },
         { status: 400 }
@@ -85,15 +89,18 @@ export async function POST(request: NextRequest) {
       qtype,
       prompt: resolvedPrompt,
       prompt_md: prompt_md || null,
+      prompt_content: prompt_content || null,
       answer,
       answer_md: answer_md || null,
       choices: choices || null,
+      choices_content: choices_content || null,
       correct_choice_index: correct_choice_index || null,
       equation: equation || null,
       tags: tags || null,
       video_url: video_url || null,
       explain: explain || null,
       explain_md: explain_md || null,
+      explain_content: explain_content || null,
       is_active: true,
     };
 

@@ -592,7 +592,7 @@ export default function ClassOverviewPage() {
                   label={{ value: '正確率 (%)', angle: -90, position: 'insideLeft' }}
                 />
                 <Tooltip
-                  formatter={(value: number | undefined) => value !== undefined ? `${value}%` : '0%'}
+                  formatter={(value) => `${Number(value ?? 0)}%`}
                   labelStyle={{ color: '#374151' }}
                 />
                 <Bar dataKey="accuracy" fill="#3B82F6" />
@@ -621,7 +621,7 @@ export default function ClassOverviewPage() {
                     label={{ value: '弱點人數', angle: -90, position: 'insideLeft' }}
                   />
                   <Tooltip 
-                    formatter={(value: number | undefined) => value !== undefined ? `${value} 人` : '0 人'}
+                    formatter={(value) => `${Number(value ?? 0)} 人`}
                     labelStyle={{ color: '#374151' }}
                   />
                   <Bar dataKey="weakCount" fill="#EF4444" />

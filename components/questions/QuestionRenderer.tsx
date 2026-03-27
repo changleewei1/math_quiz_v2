@@ -5,9 +5,12 @@ import remarkBreaks from 'remark-breaks';
 import type { MediaBlock } from '@/types/media';
 import { isImageMedia, isTableMedia, isChartMedia, parseMedia, isValidMediaBlock } from '@/types/media';
 import MediaImage from './MediaImage';
+import RichContentRenderer from '@/components/editor/RichContentRenderer';
+import type { RichTextContent } from '@/lib/richContent';
 
 interface QuestionRendererProps {
   prompt: string;
+  promptContent?: RichTextContent | null;
   media?: MediaBlock | MediaBlock[] | null | any; // 允許 any 以處理從 DB 來的 JSONB
   className?: string;
 }
@@ -18,6 +21,7 @@ interface QuestionRendererProps {
  */
 export default function QuestionRenderer({
   prompt,
+  promptContent,
   media,
   className = '',
 }: QuestionRendererProps) {
@@ -41,21 +45,25 @@ export default function QuestionRenderer({
       {/* 題幹文字 */}
       <div className="mb-4">
         <div className="text-lg leading-relaxed">
-          <ReactMarkdown
-            remarkPlugins={[remarkBreaks]}
-            components={{
-              img: ({ ...props }) => (
-                <img
-                  {...props}
-                  alt={props.alt || 'image'}
-                  className="max-w-full h-auto my-3 rounded border border-gray-200"
-                />
-              ),
-              p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
-            }}
-          >
-            {prompt || ''}
-          </ReactMarkdown>
+          {promptContent ? (
+            <RichContentRenderer content={promptContent} fallbackMarkdown={prompt} />
+          ) : (
+            <ReactMarkdown
+              remarkPlugins={[remarkBreaks]}
+              components={{
+                img: ({ ...props }) => (
+                  <img
+                    {...props}
+                    alt={props.alt || 'image'}
+                    className="max-w-full h-auto my-3 rounded border border-gray-200"
+                  />
+                ),
+                p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
+              }}
+            >
+              {prompt || ''}
+            </ReactMarkdown>
+          )}
         </div>
       </div>
 

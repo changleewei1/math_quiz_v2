@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import type { Chapter, QuestionTypeData, Question } from '@/types';
 import QuestionRenderer from '@/components/questions/QuestionRenderer';
+import RichContentRenderer from '@/components/editor/RichContentRenderer';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import { isAnswerMatch } from '@/lib/answerMatch';
@@ -1150,6 +1151,7 @@ function PracticePageContent() {
           </div>
           <QuestionRenderer
             prompt={currentQuestion.prompt_md || currentQuestion.prompt}
+            promptContent={currentQuestion.prompt_content || null}
             media={currentQuestion.media}
             className="mb-6"
           />
@@ -1179,7 +1181,16 @@ function PracticePageContent() {
                     onChange={() => setSelectedChoiceIndex(i)}
                     className="mr-3"
                   />
-                  {choice}
+                  <span className="flex-1">
+                    {currentQuestion.choices_content?.[i] ? (
+                      <RichContentRenderer
+                        content={currentQuestion.choices_content[i] as any}
+                        fallbackMarkdown={choice}
+                      />
+                    ) : (
+                      choice
+                    )}
+                  </span>
                 </label>
               ))}
             </div>

@@ -3,6 +3,38 @@
  */
 
 import { supabaseServer } from './supabaseServer';
+import { isAnswerCorrect, type Dimension, type QuestionItem } from './questions';
+import type { MvpMistakeRecord, MvpOverallLevel } from '@/types/mvp-funnel';
+import {
+  buildDimensionDetails,
+  buildRadarNotes,
+  getRecommendedCourses,
+  type MvpDimensionDetail,
+  type MvpEnrollmentCourse,
+} from '@/lib/mvp/report-narrative';
+import {
+  generateActionableStudySuggestions,
+  generateCourseRecommendation,
+  generateExecutiveSummary,
+  generateParentAdvice,
+  generateStudyPlan,
+  generateWeaknessSummary,
+} from '@/lib/mvp/level-narrative';
+
+function resolveWeakDimensionList(
+  dimensionScores: MvpDimensionScore[],
+  overallLevel: MvpOverallLevel
+): Dimension[] {
+  const weak = dimensionScores.filter((s) => s.percentage < 60).map((s) => s.dimension);
+  if (weak.length > 0) return weak;
+  if (overallLevel === 'C' || overallLevel === 'D') {
+    return [...dimensionScores]
+      .sort((a, b) => a.percentage - b.percentage)
+      .slice(0, 2)
+      .map((s) => s.dimension);
+  }
+  return [];
+}
 
 export interface TypeStatistics {
   typeId: string;
@@ -191,5 +223,155 @@ export async function analyzeDiagnosticSession(
     topWeaknesses,
     summary,
   };
+}
+
+export interface MvpAnswer {
+  questionId: string;
+  selected: string;
+}
+
+export interface MvpDimensionScore {
+  dimension: Dimension;
+  percentage: number;
+}
+
+export interface MvpAnalysisResult {
+  /** 提交測驗時一併寫入，避免 URL / localStorage key 不一致時標題缺姓名 */
+  studentName?: string;
+  /** ISO 日期字串，報告抬頭用 */
+  reportDate?: string;
+  totalScore: number;
+  overallLevel: 'A' | 'B' | 'C' | 'D';
+  dimensionScores: MvpDimensionScore[];
+  weaknesses: MvpDimensionScore[];
+  /** 相容舊版：與 studySuggestions 內容對齊 */
+  suggestions: string[];
+  /** 相容舊版卡片：僅 title + description */
+  recommendedCourses: Array<{ title: string; description: string }>;
+  /** 招生版：顧問式總結 */
+  executiveSummary?: string;
+  weaknessSummaryParagraph?: string;
+  studySuggestions?: string[];
+  studyOrderSteps?: string[];
+  parentAdviceParagraphs?: string[];
+  dimensionDetails?: MvpDimensionDetail[];
+  radarStableNote?: string;
+  radarPriorityNote?: string;
+  /** 招生版課程（含推薦理由、對象、CTA） */
+  recommendedCoursesV2?: MvpEnrollmentCourse[];
+  /** 答錯題目的概念／錯因，供分級弱點摘要 */
+  mistakeRecords?: MvpMistakeRecord[];
+  /** 用於預約頁等：優先關注向度（可能含分級補齊的次弱項） */
+  weakDimensionKeys?: Dimension[];
+}
+
+function buildFullReportPayload(args: {
+  studentName?: string;
+  reportDate?: string;
+  totalScore: number;
+  overallLevel: MvpOverallLevel;
+  dimensionScores: MvpDimensionScore[];
+  weaknesses: MvpDimensionScore[];
+  mistakeRecords?: MvpMistakeRecord[];
+}): MvpAnalysisResult {
+  const dimensionDetails = buildDimensionDetails(args.dimensionScores);
+  const name = args.studentName?.trim() || '孩子';
+  const weakDims = resolveWeakDimensionList(args.dimensionScores, args.overallLevel);
+  const mistakes = args.mistakeRecords ?? [];
+
+  const courseReasonMap = generateCourseRecommendation(args.overallLevel, weakDims);
+  const coursesV2: MvpEnrollmentCourse[] = getRecommendedCourses(dimensionDetails).map((c) => ({
+    ...c,
+    recommendedReason: courseReasonMap[c.id] ?? c.recommendedReason,
+  }));
+  const studySuggestions = generateActionableStudySuggestions(args.overallLevel, weakDims);
+  const radar = buildRadarNotes(dimensionDetails);
+
+  const executiveSummary = generateExecutiveSummary(args.overallLevel, weakDims, {
+    studentName: name,
+    totalScore: args.totalScore,
+  });
+
+  return {
+    studentName: args.studentName,
+    reportDate: args.reportDate ?? new Date().toISOString(),
+    totalScore: args.totalScore,
+    overallLevel: args.overallLevel,
+    dimensionScores: args.dimensionScores,
+    weaknesses: args.weaknesses,
+    suggestions: studySuggestions,
+    recommendedCourses: coursesV2.map((c) => ({ title: c.title, description: c.description })),
+    executiveSummary,
+    weaknessSummaryParagraph: generateWeaknessSummary(args.overallLevel, mistakes),
+    studySuggestions,
+    studyOrderSteps: generateStudyPlan(args.overallLevel, weakDims),
+    parentAdviceParagraphs: generateParentAdvice(args.overallLevel),
+    dimensionDetails,
+    radarStableNote: radar.stable,
+    radarPriorityNote: radar.priority,
+    recommendedCoursesV2: coursesV2,
+    mistakeRecords: mistakes,
+    weakDimensionKeys: weakDims,
+  };
+}
+
+/** 舊版 localStorage 報告補齊招生欄位 */
+export function enrichMvpReport(partial: MvpAnalysisResult): MvpAnalysisResult {
+  return buildFullReportPayload({
+    studentName: partial.studentName,
+    reportDate: partial.reportDate,
+    totalScore: partial.totalScore,
+    overallLevel: partial.overallLevel,
+    dimensionScores: partial.dimensionScores,
+    weaknesses: partial.weaknesses,
+    mistakeRecords: partial.mistakeRecords,
+  });
+}
+
+export function calculateResult(
+  questions: QuestionItem[],
+  answers: MvpAnswer[],
+  opts?: { studentName?: string }
+): MvpAnalysisResult {
+  const answerMap = new Map<string, string>(answers.map((item) => [item.questionId, item.selected]));
+  const byDimension = new Map<Dimension, { total: number; correct: number }>();
+  const mistakeRecords: MvpMistakeRecord[] = [];
+
+  for (const q of questions) {
+    const selected = answerMap.get(q.id) ?? '';
+    const slot = byDimension.get(q.dimension) ?? { total: 0, correct: 0 };
+    slot.total += 1;
+    if (isAnswerCorrect(q, selected)) {
+      slot.correct += 1;
+    } else {
+      mistakeRecords.push({
+        dimension: q.dimension,
+        concept_tag: q.concept_tag,
+        mistake_type: q.mistake_type,
+      });
+    }
+    byDimension.set(q.dimension, slot);
+  }
+
+  const totalCorrect = questions.filter((q) => isAnswerCorrect(q, answerMap.get(q.id) ?? '')).length;
+  const totalScore = Math.round((totalCorrect / questions.length) * 100);
+  const overallLevel: 'A' | 'B' | 'C' | 'D' =
+    totalScore >= 90 ? 'A' : totalScore >= 75 ? 'B' : totalScore >= 60 ? 'C' : 'D';
+
+  const dimensionScores: MvpDimensionScore[] = Array.from(byDimension.entries()).map(([dimension, stat]) => ({
+    dimension,
+    percentage: Math.round((stat.correct / stat.total) * 100),
+  }));
+
+  const weaknesses = dimensionScores.filter((item) => item.percentage < 60);
+
+  return buildFullReportPayload({
+    studentName: opts?.studentName,
+    totalScore,
+    overallLevel,
+    dimensionScores,
+    weaknesses,
+    mistakeRecords,
+  });
 }
 

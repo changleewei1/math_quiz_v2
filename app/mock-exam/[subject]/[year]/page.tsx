@@ -7,17 +7,22 @@ import BrandHeader from '@/components/BrandHeader';
 import { isAnswerMatch } from '@/lib/answerMatch';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
+import RichContentRenderer from '@/components/editor/RichContentRenderer';
+import { getPlainTextFromContent, type RichTextContent } from '@/lib/richContent';
 
 type ExamQuestion = {
   id: string;
   code: string;
   description: string;
   description_md?: string | null;
+  prompt_content?: RichTextContent | null;
   options: string[] | null;
+  choices_content?: Array<RichTextContent | null> | null;
   answer: any;
   answer_md?: string | null;
   explanation?: string | null;
   explanation_md?: string | null;
+  explain_content?: RichTextContent | null;
   question_no?: number | null;
   order_index?: number | null;
 };
@@ -127,6 +132,20 @@ export default function MockExamSessionPage() {
     </ReactMarkdown>
   );
 
+  const toContentFromText = (text: string): RichTextContent => ({
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: text ? [{ type: 'text', text }] : [],
+      },
+    ],
+  });
+
+  const renderRich = (content?: RichTextContent | null, fallback?: string | null) => (
+    <RichContentRenderer content={content || null} fallbackMarkdown={fallback || ''} />
+  );
+
   const handleSubmit = () => {
     if (questions.length === 0) return;
     setSubmitted(true);
@@ -163,11 +182,17 @@ export default function MockExamSessionPage() {
                       第 {q.question_no ?? index + 1} 題
                     </div>
                     <div className="text-gray-900 text-base sm:text-lg leading-relaxed mb-4">
-                      {renderMarkdown(q.description_md || q.description || '')}
+                      {renderRich(
+                        q.prompt_content,
+                        q.description_md || q.description || ''
+                      )}
                     </div>
                     {(() => {
                       const rawOptions = q.options;
                       let options: string[] = [];
+                      const choicesContent = Array.isArray(q.choices_content)
+                        ? q.choices_content
+                        : [];
                       if (Array.isArray(rawOptions)) {
                         options = rawOptions.map((opt) => String(opt));
                       } else if (typeof rawOptions === 'string') {
@@ -180,15 +205,19 @@ export default function MockExamSessionPage() {
                           options = [];
                         }
                       }
-                      return options.length > 0 ? (
+                      const resolvedOptionLabels =
+                        choicesContent.length > 0
+                          ? choicesContent.map((choice) => getPlainTextFromContent(choice))
+                          : options;
+                      return resolvedOptionLabels.length > 0 ? (
                         <div className="space-y-2">
-                          {options.map((opt, idx) => (
+                          {(choicesContent.length > 0 ? choicesContent : options.map((opt) => toContentFromText(opt))).map((opt, idx) => (
                           <label key={idx} className="flex items-center gap-2 text-base text-gray-800">
                             <input
                               type="radio"
                               name={`q-${q.id}`}
-                              value={opt}
-                              checked={answers[q.id] === opt}
+                              value={resolvedOptionLabels[idx] || String(idx)}
+                              checked={answers[q.id] === (resolvedOptionLabels[idx] || String(idx))}
                               onChange={(e) => {
                                 const value = e.target.value;
                                 setAnswers({ ...answers, [q.id]: value });
@@ -199,7 +228,11 @@ export default function MockExamSessionPage() {
                                 showFeedback(q.id, isCorrect ? 'correct' : 'wrong');
                               }}
                             />
-                            <span>{opt}</span>
+                            <span className="flex-1">
+                              {typeof opt === 'string'
+                                ? opt
+                                : renderRich(opt as RichTextContent, options[idx] || '')}
+                            </span>
                           </label>
                           ))}
                         </div>
@@ -257,7 +290,10 @@ export default function MockExamSessionPage() {
                       <div key={q.id} className="border rounded p-4">
                         <div className="text-sm text-gray-500 mb-2">第 {index + 1} 題</div>
                         <div className="text-gray-900 text-base sm:text-lg leading-relaxed mb-4">
-                          {renderMarkdown(q.description_md || q.description || '')}
+                          {renderRich(
+                            q.prompt_content,
+                            q.description_md || q.description || ''
+                          )}
                         </div>
                         {q.options && q.options.length > 0 && (
                           <div className="text-sm text-gray-600 mb-2">
@@ -274,10 +310,13 @@ export default function MockExamSessionPage() {
                             : formatAnswer(q.answer)}
                         </div>
                         {(q.explanation_md || q.explanation) && (
-                          <div className="text-sm text-gray-600 mt-2">
-                            <span className="font-medium">解析：</span>
-                            {renderMarkdown(q.explanation_md || q.explanation || '')}
-                          </div>
+                        <div className="text-sm text-gray-600 mt-2">
+                          <span className="font-medium">解析：</span>
+                          {renderRich(
+                            q.explain_content,
+                            q.explanation_md || q.explanation || ''
+                          )}
+                        </div>
                         )}
                       </div>
                     ))}

@@ -6,6 +6,9 @@ import type { Question } from '@/types';
 import type { MediaBlock } from '@/types/media';
 import { isImageMedia } from '@/types/media';
 import QuestionRenderer from '@/components/questions/QuestionRenderer';
+import RichTextEditor from '@/components/editor/RichTextEditor';
+import RichContentRenderer from '@/components/editor/RichContentRenderer';
+import { getPlainTextFromContent, type RichTextContent } from '@/lib/richContent';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 
@@ -23,13 +26,16 @@ export default function EditQuestionPage() {
     qtype: 'input',
     prompt: '',
     prompt_md: '',
+    prompt_content: null,
     answer: '',
     answer_md: '',
     choices: null,
+    choices_content: null,
     correct_choice_index: null,
     equation: null,
     explain: null,
     explain_md: '',
+    explain_content: null,
     media: null,
   });
   const [loading, setLoading] = useState(false);
@@ -42,16 +48,20 @@ export default function EditQuestionPage() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imageCaption, setImageCaption] = useState('');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [showPromptPreview, setShowPromptPreview] = useState(false);
-  const [showExplainPreview, setShowExplainPreview] = useState(false);
   const [showAnswerPreview, setShowAnswerPreview] = useState(false);
   const [uploadingMdImage, setUploadingMdImage] = useState(false);
-  const promptRef = useRef<HTMLTextAreaElement | null>(null);
-  const explainRef = useRef<HTMLTextAreaElement | null>(null);
   const answerRef = useRef<HTMLTextAreaElement | null>(null);
-  const promptFileRef = useRef<HTMLInputElement | null>(null);
-  const explainFileRef = useRef<HTMLInputElement | null>(null);
   const answerFileRef = useRef<HTMLInputElement | null>(null);
+
+  const toContentFromText = (text: string): RichTextContent => ({
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: text ? [{ type: 'text', text }] : [],
+      },
+    ],
+  });
 
   useEffect(() => {
     if (questionId && questionId !== 'new') {
@@ -77,18 +87,32 @@ export default function EditQuestionPage() {
       
       if (res.ok && data.data) {
         const q = data.data;
+        const resolvedPromptContent =
+          q.prompt_content ||
+          (q.prompt_md || q.prompt ? toContentFromText(q.prompt_md || q.prompt || '') : null);
+        const resolvedExplainContent =
+          q.explain_content ||
+          (q.explain_md || q.explain ? toContentFromText(q.explain_md || q.explain || '') : null);
+        const resolvedChoicesContent =
+          q.choices_content ||
+          (Array.isArray(q.choices)
+            ? q.choices.map((choice: string) => toContentFromText(choice || ''))
+            : null);
         setQuestion({
           difficulty: q.difficulty,
           qtype: q.qtype,
           prompt: q.prompt || '',
           prompt_md: q.prompt_md || '',
+          prompt_content: resolvedPromptContent,
           answer: q.answer || '',
           answer_md: q.answer_md || '',
           choices: q.choices || null,
+          choices_content: resolvedChoicesContent,
           correct_choice_index: q.correct_choice_index ?? null,
           equation: q.equation || null,
           explain: q.explain || null,
           explain_md: q.explain_md || '',
+          explain_content: resolvedExplainContent,
           media: q.media || null,
         });
         
@@ -134,17 +158,23 @@ export default function EditQuestionPage() {
         : `/api/admin/question?id=${questionId}`;
       const method = questionId === 'new' ? 'POST' : 'PATCH';
 
-      const resolvedPrompt = question.prompt_md?.trim() || question.prompt || '';
-      const resolvedExplain = question.explain_md?.trim() || question.explain || null;
+      const resolvedPromptContent = question.prompt_content as RichTextContent | null;
+      const resolvedExplainContent = question.explain_content as RichTextContent | null;
+      const resolvedPromptFallback =
+        resolvedPromptContent ? getPlainTextFromContent(resolvedPromptContent) : question.prompt_md?.trim() || question.prompt || '';
+      const resolvedExplainFallback =
+        resolvedExplainContent ? getPlainTextFromContent(resolvedExplainContent) : question.explain_md?.trim() || question.explain || null;
       const body: any = {
         chapter_id: chapterId,
         type_id: typeId,
         difficulty: question.difficulty,
         qtype: question.qtype,
-        prompt: resolvedPrompt,
+        prompt: resolvedPromptFallback || '',
         prompt_md: question.prompt_md?.trim() || null,
+        prompt_content: resolvedPromptContent,
         answer: question.answer,
         answer_md: question.answer_md?.trim() || null,
+        explain_content: resolvedExplainContent,
       };
 
       // 如果是插入模式，設定 created_at 來控制順序
@@ -162,7 +192,12 @@ export default function EditQuestionPage() {
       }
 
       if (question.qtype === 'mcq') {
-        body.choices = question.choices;
+        const choicesContent = (question.choices_content || []) as Array<RichTextContent | null>;
+        const choicesFallback = choicesContent.length
+          ? choicesContent.map((choice) => getPlainTextFromContent(choice))
+          : question.choices || [];
+        body.choices_content = choicesContent.length ? choicesContent : null;
+        body.choices = choicesFallback;
         body.correct_choice_index = question.correct_choice_index;
       }
 
@@ -170,8 +205,8 @@ export default function EditQuestionPage() {
         body.equation = question.equation;
       }
 
-      if (resolvedExplain) {
-        body.explain = resolvedExplain;
+      if (resolvedExplainFallback) {
+        body.explain = resolvedExplainFallback;
       }
       if (question.explain_md?.trim()) {
         body.explain_md = question.explain_md.trim();
@@ -199,20 +234,24 @@ export default function EditQuestionPage() {
   };
 
   const handleAddChoice = () => {
-    const choices = question.choices || [];
-    setQuestion({ ...question, choices: [...choices, ''] });
+    const choicesContent = [...(question.choices_content || [])];
+    choicesContent.push(toContentFromText(''));
+    setQuestion({
+      ...question,
+      choices_content: choicesContent,
+    });
   };
 
-  const handleChoiceChange = (index: number, value: string) => {
-    const choices = [...(question.choices || [])];
-    choices[index] = value;
-    setQuestion({ ...question, choices });
+  const handleChoiceContentChange = (index: number, value: RichTextContent) => {
+    const choicesContent = [...(question.choices_content || [])];
+    choicesContent[index] = value;
+    setQuestion({ ...question, choices_content: choicesContent });
   };
 
   const insertAtCursor = (
     ref: React.RefObject<HTMLTextAreaElement>,
     value: string,
-    field: 'prompt_md' | 'explain_md' | 'answer_md'
+    field: 'answer_md'
   ) => {
     const target = ref.current;
     if (!target) {
@@ -253,7 +292,7 @@ export default function EditQuestionPage() {
     return data.url as string;
   };
 
-  const uploadMarkdownImage = async (file: File, field: 'prompt_md' | 'explain_md' | 'answer_md') => {
+  const uploadMarkdownImage = async (file: File, field: 'answer_md') => {
     if (!chapterId || !typeId) {
       setError('缺少章節或題型資訊');
       return;
@@ -266,19 +305,11 @@ export default function EditQuestionPage() {
       const path = `questions/${chapterId}/${typeId}/${key}.${ext}`;
       const publicUrl = await uploadAdminImage(file, 'question-assets', path);
       const markdown = `![image](${publicUrl})`;
-      if (field === 'prompt_md') {
-        insertAtCursor(promptRef, markdown, field);
-      } else if (field === 'explain_md') {
-        insertAtCursor(explainRef, markdown, field);
-      } else {
-        insertAtCursor(answerRef, markdown, field);
-      }
+      insertAtCursor(answerRef, markdown, field);
     } catch (err: any) {
       setError(err.message || '上傳失敗');
     } finally {
       setUploadingMdImage(false);
-      if (field === 'prompt_md' && promptFileRef.current) promptFileRef.current.value = '';
-      if (field === 'explain_md' && explainFileRef.current) explainFileRef.current.value = '';
       if (field === 'answer_md' && answerFileRef.current) answerFileRef.current.value = '';
     }
   };
@@ -392,6 +423,11 @@ export default function EditQuestionPage() {
     }
   };
 
+  const displayChoicesContent = (question.choices_content ||
+    (Array.isArray(question.choices)
+      ? question.choices.map((choice) => toContentFromText(choice || ''))
+      : [])) as RichTextContent[];
+
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-4xl mx-auto bg-white p-6 rounded-lg shadow">
@@ -490,85 +526,38 @@ export default function EditQuestionPage() {
             </div>
           </div>
 
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-sm font-medium">題目內容（Markdown）</label>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowPromptPreview((prev) => !prev)}
-                  className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded"
-                >
-                  {showPromptPreview ? '編輯' : '預覽'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => promptFileRef.current?.click()}
-                  disabled={uploadingMdImage}
-                  className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded disabled:opacity-50"
-                >
-                  {uploadingMdImage ? '上傳中...' : '上傳圖片'}
-                </button>
-              </div>
-            </div>
-            {!showPromptPreview ? (
-              <textarea
-                ref={promptRef}
-                value={question.prompt_md || question.prompt || ''}
-                onChange={(e) => setQuestion({ ...question, prompt_md: e.target.value })}
-                className="w-full p-2 bg-white text-gray-900 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder:text-gray-400 font-mono text-sm"
-                rows={6}
-                required
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">題目內容（富文字）</label>
+              <RichTextEditor
+                value={(question.prompt_content as RichTextContent) || null}
+                onChange={(content) => setQuestion({ ...question, prompt_content: content })}
+                placeholder="輸入題目內容，可插入圖片"
+                minHeight="260px"
               />
-            ) : (
-              <div className="w-full p-3 border rounded bg-gray-50">
-                <ReactMarkdown
-                  remarkPlugins={[remarkBreaks]}
-                  components={{
-                    img: ({ ...props }) => (
-                      <img
-                        {...props}
-                        alt={props.alt || 'image'}
-                        className="max-w-full h-auto my-3 rounded border border-gray-200"
-                      />
-                    ),
-                    p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
-                  }}
-                >
-                  {question.prompt_md || question.prompt || ''}
-                </ReactMarkdown>
-              </div>
-            )}
-            <input
-              ref={promptFileRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) uploadMarkdownImage(file, 'prompt_md');
-              }}
-            />
-            <p className="mt-1 text-xs text-gray-500">支援 Markdown（可插入圖片語法）</p>
-          </div>
-
-          {/* 題目預覽區塊 */}
-          {(question.prompt || question.prompt_md || question.media) && (
-            <div className="border-t pt-4 mt-4">
+            </div>
+            <div>
               <label className="block text-sm font-medium mb-2 text-gray-700">
-                預覽效果
+                即時預覽
               </label>
-              <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                <QuestionRenderer 
-                  prompt={question.prompt_md || question.prompt || '（題目內容預覽）'} 
-                  media={question.media || null}
-                />
+              <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg min-h-[260px]">
+                {question.prompt_content ? (
+                  <RichContentRenderer
+                    content={question.prompt_content as RichTextContent}
+                    fallbackMarkdown={question.prompt_md || question.prompt || '（題目內容預覽）'}
+                  />
+                ) : (
+                  <QuestionRenderer
+                    prompt={question.prompt_md || question.prompt || '（題目內容預覽）'}
+                    media={question.media || null}
+                  />
+                )}
               </div>
               <p className="mt-1 text-xs text-gray-500">
-                這是題目在前台的顯示效果預覽
+                學生端顯示效果
               </p>
             </div>
-          )}
+          </div>
 
           {/* 題目圖片上傳區塊 */}
           <div className="border-t pt-4 mt-4">
@@ -651,21 +640,23 @@ export default function EditQuestionPage() {
           {question.qtype === 'mcq' && (
             <div>
               <label className="block text-sm font-medium mb-1">選項</label>
-              {(question.choices || []).map((choice, index) => (
-                <div key={index} className="flex items-center mb-2">
-                  <input
-                    type="radio"
-                    name="correct"
-                    checked={question.correct_choice_index === index}
-                    onChange={() => setQuestion({ ...question, correct_choice_index: index })}
-                    className="mr-2"
-                  />
-                  <input
-                    type="text"
+              {displayChoicesContent.map((choice, index) => (
+                <div key={index} className="border rounded p-3 mb-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <input
+                      type="radio"
+                      name="correct"
+                      checked={question.correct_choice_index === index}
+                      onChange={() => setQuestion({ ...question, correct_choice_index: index })}
+                      className="mr-1"
+                    />
+                    <span className="text-sm text-gray-600">選項 {index + 1}</span>
+                  </div>
+                  <RichTextEditor
                     value={choice}
-                    onChange={(e) => handleChoiceChange(index, e.target.value)}
-                    className="flex-1 p-2 bg-white text-gray-900 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder:text-gray-400"
-                    placeholder={`選項 ${index + 1}`}
+                    onChange={(content) => handleChoiceContentChange(index, content)}
+                    placeholder={`輸入選項 ${index + 1}`}
+                    minHeight="120px"
                   />
                 </div>
               ))}
@@ -763,62 +754,12 @@ export default function EditQuestionPage() {
           </div>
 
           <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-sm font-medium">解析（Markdown，可選）</label>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowExplainPreview((prev) => !prev)}
-                  className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded"
-                >
-                  {showExplainPreview ? '編輯' : '預覽'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => explainFileRef.current?.click()}
-                  disabled={uploadingMdImage}
-                  className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded disabled:opacity-50"
-                >
-                  {uploadingMdImage ? '上傳中...' : '上傳圖片'}
-                </button>
-              </div>
-            </div>
-            {!showExplainPreview ? (
-              <textarea
-                ref={explainRef}
-                value={question.explain_md || question.explain || ''}
-                onChange={(e) => setQuestion({ ...question, explain_md: e.target.value })}
-                className="w-full p-2 border rounded font-mono text-sm"
-                rows={4}
-              />
-            ) : (
-              <div className="w-full p-3 border rounded bg-gray-50">
-                <ReactMarkdown
-                  remarkPlugins={[remarkBreaks]}
-                  components={{
-                    img: ({ ...props }) => (
-                      <img
-                        {...props}
-                        alt={props.alt || 'image'}
-                        className="max-w-full h-auto my-3 rounded border border-gray-200"
-                      />
-                    ),
-                    p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
-                  }}
-                >
-                  {question.explain_md || question.explain || ''}
-                </ReactMarkdown>
-              </div>
-            )}
-            <input
-              ref={explainFileRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) uploadMarkdownImage(file, 'explain_md');
-              }}
+            <label className="block text-sm font-medium mb-2">解析（富文字，可選）</label>
+            <RichTextEditor
+              value={(question.explain_content as RichTextContent) || null}
+              onChange={(content) => setQuestion({ ...question, explain_content: content })}
+              placeholder="輸入解析內容，可插入圖片"
+              minHeight="180px"
             />
           </div>
 

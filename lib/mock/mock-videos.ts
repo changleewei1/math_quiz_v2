@@ -1,0 +1,73 @@
+import type { Video } from '@/types/quiz';
+
+const now = '2026-03-14T00:00:00.000Z';
+
+export const mockVideos: Video[] = [
+  {
+    id: 'video-001',
+    title: '正負數與整數運算入門',
+    youtube_url: 'https://youtube.com/watch?v=demo-number-1',
+    dimension: 'number_sense',
+    tags: ['整數', '加減', '數感'],
+    is_active: true,
+    sort_order: 1,
+    created_at: now,
+    updated_at: now,
+  },
+  {
+    id: 'video-002',
+    title: '分數大小比較的快速方法',
+    youtube_url: 'https://youtube.com/watch?v=demo-number-2',
+    dimension: 'number_sense',
+    tags: ['分數', '比較'],
+    is_active: true,
+    sort_order: 2,
+    created_at: now,
+    updated_at: now,
+  },
+  {
+    id: 'video-003',
+    title: '用未知數解簡單問題',
+    youtube_url: 'https://youtube.com/watch?v=demo-algebra-1',
+    dimension: 'algebra_logic',
+    tags: ['未知數', '等式'],
+    is_active: true,
+    sort_order: 3,
+    created_at: now,
+    updated_at: now,
+  },
+  {
+    id: 'video-004',
+    title: '文字題怎麼轉成算式',
+    youtube_url: 'https://youtube.com/watch?v=demo-word-1',
+    dimension: 'word_problem',
+    tags: ['題意拆解', '應用題'],
+    is_active: true,
+    sort_order: 4,
+    created_at: now,
+    updated_at: now,
+  },
+  {
+    id: 'video-005',
+    title: '三角形與角度基礎',
+    youtube_url: 'https://youtube.com/watch?v=demo-geo-1',
+    dimension: 'geometry',
+    tags: ['三角形', '角度'],
+    is_active: true,
+    sort_order: 5,
+    created_at: now,
+    updated_at: now,
+  },
+  {
+    id: 'video-006',
+    title: '看懂簡單統計圖',
+    youtube_url: 'https://youtube.com/watch?v=demo-data-1',
+    dimension: 'data_reasoning',
+    tags: ['統計圖', '比較'],
+    is_active: true,
+    sort_order: 6,
+    created_at: now,
+    updated_at: now,
+  },
+];
+

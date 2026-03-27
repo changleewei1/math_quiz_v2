@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import QuestionRenderer from '@/components/questions/QuestionRenderer';
+import RichContentRenderer from '@/components/editor/RichContentRenderer';
 import { isAnswerMatch } from '@/lib/answerMatch';
 
 type AnswerState = Record<
@@ -226,7 +227,11 @@ export default function DiagnosticSessionPage() {
                   第 {index + 1} 題 | {q.difficulty}
                 </span>
               </div>
-              <QuestionRenderer prompt={q.prompt_md || q.prompt} media={q.media} />
+              <QuestionRenderer
+                prompt={q.prompt_md || q.prompt}
+                promptContent={q.prompt_content || null}
+                media={q.media}
+              />
 
               {q.qtype === 'mcq' && q.choices ? (
                 <div className="space-y-2">
@@ -252,7 +257,16 @@ export default function DiagnosticSessionPage() {
                         }}
                         className="mr-2"
                       />
-                      {choice}
+                      <span className="flex-1">
+                        {q.choices_content?.[i] ? (
+                          <RichContentRenderer
+                            content={q.choices_content[i] as any}
+                            fallbackMarkdown={choice}
+                          />
+                        ) : (
+                          choice
+                        )}
+                      </span>
                     </label>
                   ))}
                 </div>

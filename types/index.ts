@@ -38,15 +38,18 @@ export interface Question {
   qtype: QuestionType;
   prompt: string;
   prompt_md?: string | null;
+  prompt_content?: Record<string, any> | null;
   answer: string;
   answer_md?: string | null;
   choices: string[] | null;
+  choices_content?: Array<Record<string, any> | null> | null;
   correct_choice_index: number | null;
   equation: string | null;
   tags: string[] | null;
   video_url: string | null;
   explain: string | null;
   explain_md?: string | null;
+  explain_content?: Record<string, any> | null;
   media: MediaBlock | null; // 題目媒體資源（圖片、圖表等）
   is_active: boolean;
   created_at: string;
@@ -95,4 +98,5 @@ export interface DiagnosticAnalysis {
   recommended_difficulty: Difficulty;
 }
 
+export * from './quiz';
 
